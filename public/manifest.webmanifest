@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Mundo Zeno — Mesa Interativa",
+  "short_name": "Mundo Zeno",
+  "description": "Mesa interativa de aprendizagem com jogos, avatares e relatórios.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "landscape",
+  "background_color": "#1D4ED8",
+  "theme_color": "#1D4ED8",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["education", "kids", "games"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
