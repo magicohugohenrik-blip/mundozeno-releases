@@ -1,0 +1,40 @@
+{
+  "name": "mundo-zeno-desktop",
+  "productName": "Mundo Zeno",
+  "version": "1.0.3",
+  "private": true,
+  "description": "Aplicativo Windows da mesa interativa Mundo Zeno",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "br.com.mundozeno.mesa",
+    "productName": "Mundo Zeno",
+    "files": ["main.cjs", "preload.cjs", "node_modules/**/*"],
+    "publish": {
+      "provider": "github",
+      "owner": "magicohugohenrik-blip",
+      "repo": "mundozeno-releases"
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "MundoZeno-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Mundo Zeno"
+    }
+  }
+}
