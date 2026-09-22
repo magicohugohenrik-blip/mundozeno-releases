@@ -1,0 +1,1 @@
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS virtual_keyboard boolean NOT NULL DEFAULT true;
