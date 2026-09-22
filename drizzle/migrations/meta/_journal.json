@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790036665845,
+      "tag": "0000_network_hierarchy_and_report_shares",
+      "breakpoints": true
+    }
+  ]
+}
