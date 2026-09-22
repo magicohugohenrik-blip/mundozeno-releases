@@ -1,0 +1,47 @@
+name: Build Windows Installer
+
+# Gera o instalador Mundo Zeno (MundoZeno-Setup-x.x.x.exe) num runner Windows
+# da Microsoft e publica automaticamente na Release do GitHub quando acionado
+# por uma tag (ex.: v1.0.4). Acionamento manual só builda e deixa o .exe como
+# artifact para download — não publica Release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: desktop
+        run: npm install
+
+      - name: Build and publish installer
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Em push de tag: publica na Release automaticamente.
+        # Em acionamento manual: só builda (artifact para download).
+        run: npx electron-builder --win nsis --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MundoZeno-Installer
+          path: desktop/dist/MundoZeno-Setup-*.exe
+          if-no-files-found: warn
