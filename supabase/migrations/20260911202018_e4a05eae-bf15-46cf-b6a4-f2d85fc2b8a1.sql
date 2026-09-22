@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.seed_device_app_access() FROM PUBLIC, anon, authenticated;
