@@ -1,3 +1,4 @@
+import { publicOrigin } from "@/lib/publicUrl";
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
@@ -40,7 +41,7 @@ export function ReportQr({
               ? { studentId, days: choice.days }
               : { studentId, hours: choice.hours };
         const res = await createReportShare({ data: payload });
-        const link = `${window.location.origin}/m/${res.token}`;
+        const link = `${publicOrigin()}/m/${res.token}`;
         setUrl(link);
         setExpiresAt(choice.kind === "unlimited" ? null : res.expiresAt);
         setImage(await QRCode.toDataURL(link, { width: 420, margin: 1 }));

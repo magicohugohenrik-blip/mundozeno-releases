@@ -1,3 +1,4 @@
+import { publicOrigin } from "@/lib/publicUrl";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -235,7 +236,7 @@ function TelaMagica() {
   const doShare = async (creationId: string) => {
     const r = await run(() => shareFn({ data: { creationId, days: 30 } }));
     if (!r) return;
-    const url = `${window.location.origin}/tela-magica?share=${r.token}`;
+    const url = `${publicOrigin()}/tela-magica?share=${r.token}`;
     setShareInfo({ token: r.token, url });
     void navigator.clipboard?.writeText(url).catch(() => undefined);
   };
