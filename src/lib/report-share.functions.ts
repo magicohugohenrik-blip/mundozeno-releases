@@ -21,7 +21,12 @@ export const createReportShare = createServerFn({ method: "POST" })
     z
       .object({
         studentId: z.string().uuid(),
+        /** Validade em horas (usado pelos atalhos rápidos). */
         hours: z.number().int().min(1).max(168).default(12),
+        /** Validade em dias digitada pelo profissional. */
+        days: z.number().int().min(1).max(3650).optional(),
+        /** Acesso sem tempo determinado (validade longa de 10 anos). */
+        unlimited: z.boolean().optional(),
       })
       .parse(data),
   )
@@ -34,8 +39,9 @@ export const createReportShare = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !student) throw new Error("Criança não encontrada nesta instituição.");
 
+    const hours = data.unlimited ? 3650 * 24 : data.days ? data.days * 24 : data.hours;
     const value = token();
-    const expiresAt = new Date(Date.now() + data.hours * 3600_000).toISOString();
+    const expiresAt = new Date(Date.now() + hours * 3600_000).toISOString();
     const { error: insErr } = await context.supabase.from("report_shares").insert({
       token: value,
       student_id: student.id,
@@ -45,7 +51,55 @@ export const createReportShare = createServerFn({ method: "POST" })
     });
     if (insErr) throw new Error(insErr.message);
 
-    return { token: value, expiresAt };
+    return { token: value, expiresAt, unlimited: !!data.unlimited };
+  });
+
+
+/**
+ * Cadastro de criança pelo celular do profissional (link do QR Code).
+ * O token comprova que o profissional recebeu o acesso da própria mesa;
+ * a criança entra somente na instituição daquela mesa.
+ */
+export const createStudentFromShare = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z
+      .object({
+        token: z.string().trim().min(10).max(64),
+        fullName: z.string().trim().min(2).max(120),
+        nickname: z.string().trim().max(60).optional(),
+        birthDate: z.string().trim().max(10).optional(),
+        character: z.string().trim().max(30).default("zeno"),
+        /** Cadastro completo: anamnese e CIDs (opcionais). */
+        anamnesis: z.record(z.string(), z.string().max(1000)).optional(),
+        cids: z.array(z.string().trim().max(12)).max(20).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<{ ok: false; reason: "invalid" | "expired" } | { ok: true; name: string }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: share } = await supabaseAdmin
+      .from("report_shares")
+      .select("organization_id, expires_at, revoked")
+      .eq("token", data.token)
+      .maybeSingle();
+
+    if (!share || share.revoked) return { ok: false as const, reason: "invalid" as const };
+    if (new Date(share.expires_at).getTime() < Date.now()) return { ok: false as const, reason: "expired" as const };
+
+    const { error } = await supabaseAdmin.from("students").insert({
+      organization_id: share.organization_id,
+      full_name: data.fullName,
+      nickname: data.nickname || null,
+      birth_date: data.birthDate || null,
+      avatar: { character: data.character },
+      ...(data.anamnesis && Object.keys(data.anamnesis).length > 0 ? { anamnesis: data.anamnesis } : {}),
+      ...(data.cids && data.cids.length > 0 ? { cid_codes: data.cids } : {}),
+    });
+    if (error) throw new Error(error.message);
+
+
+    return { ok: true as const, name: data.fullName };
   });
 
 export interface SharedReport {

@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.manages_device(uuid) TO authenticated;

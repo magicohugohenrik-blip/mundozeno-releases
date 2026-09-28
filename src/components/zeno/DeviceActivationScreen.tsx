@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { motion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import { activateDevice } from "@/lib/device.functions";
@@ -20,6 +21,21 @@ export function clearDeviceActivation(): void {
   if (typeof window !== "undefined") window.localStorage.removeItem(ACTIVE_KEY);
 }
 
+/** Reconecta a mesa já ativada usando o código guardado (sem digitar nada). */
+export async function reconnectDevice(code: string): Promise<boolean> {
+  try {
+    const res = await activateDevice({ data: { code } });
+    if (!res.ok) {
+      if (res.reason !== "no_account") clearDeviceActivation();
+      return false;
+    }
+    const { error } = await supabase.auth.verifyOtp({ token_hash: res.tokenHash, type: "magiclink" });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Primeiro acesso da mesa: sem um código válido o Mundo Zeno não abre.
  * O código é conferido no servidor, que devolve um acesso de uso único —
@@ -30,11 +46,28 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!code.trim()) return;
     setError(null);
+    if (!navigator.onLine) {
+      setError(t("activation.offline"));
+      return;
+    }
+    setLoading(true);
     try {
       const res = await activateDevice({ data: { code: code.trim().toUpperCase() } });
       if (!res.ok) {
@@ -59,7 +92,7 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
       window.localStorage.setItem(ACTIVE_KEY, "1");
       onActivated();
     } catch {
-      setError(t("activation.error"));
+      setError(navigator.onLine ? t("activation.error") : t("activation.offline"));
     } finally {
       setLoading(false);
     }
@@ -88,6 +121,15 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
           <BrandMark />
           <h1 className="font-display text-3xl text-foreground sm:text-4xl">{t("activation.title")}</h1>
           <p className="text-base text-muted-foreground">{t("activation.subtitle")}</p>
+          <p className="text-sm text-muted-foreground">{t("activation.internetOnce")}</p>
+          <span
+            className={`mt-1 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold ${
+              online ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+            }`}
+          >
+            {online ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+            {online ? t("activation.statusOnline") : t("activation.statusOffline")}
+          </span>
         </div>
 
         <form onSubmit={submit} className="mt-8 space-y-4">
@@ -104,9 +146,18 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
           </label>
 
           {error && (
-            <p className="rounded-2xl bg-destructive/10 px-4 py-3 text-center font-semibold text-destructive">
-              {error}
-            </p>
+            <div className="space-y-3 rounded-2xl bg-destructive/10 px-4 py-3 text-center">
+              <p className="font-semibold text-destructive">{error}</p>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-full border border-destructive/30 bg-background px-5 py-2 font-semibold text-destructive disabled:opacity-60"
+              >
+                <RefreshCw className="h-4 w-4" />
+                {t("activation.retry")}
+              </button>
+            </div>
           )}
 
           <button

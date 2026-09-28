@@ -1,7 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { NewStudentForm } from "@/components/zeno/NewStudentForm";
 import { BrandMark } from "@/components/zeno/BrandMark";
 import { ZenoSays } from "@/components/zeno/ZenoSays";
 import { HeroBanner } from "@/components/zeno/HeroBanner";
@@ -21,7 +23,7 @@ import { GameIntro } from "@/components/games/GameIntro";
 import memoryBg from "@/assets/scenes/memory-bg.jpg.asset.json";
 import shapesBg from "@/assets/scenes/shapes-bg.jpg.asset.json";
 
-import { categoryOf, sceneFor } from "@/lib/categories";
+import { categories, categoryOf, sceneFor } from "@/lib/categories";
 import { playSfx, setSoundEnabled, soundEnabled, speak, stopSpeaking } from "@/lib/audio";
 import { LanguageSwitch } from "@/components/zeno/LanguageSwitch";
 import { useI18n, useT } from "@/lib/i18n";
@@ -34,18 +36,28 @@ import {
   type CatalogGame,
   type GameResult,
 } from "@/lib/zeno";
-import { flushQueue, getDeviceCode, pendingCount, recordSession } from "@/lib/session-sync";
-import { registerServiceWorker, useConnection } from "@/lib/offline";
+import { flushQueue, getDeviceCode, recordSession } from "@/lib/session-sync";
+import { registerServiceWorker, syncNow, totalPending, useConnection, useSyncStatus } from "@/lib/offline";
+import {
+  cacheServerStudents,
+  listLocalStudents,
+  rememberOrg,
+  rememberedOrg,
+  saveStudentLocal,
+  updateStudentLocal,
+} from "@/lib/local-students";
 import { TechPanel } from "@/components/zeno/TechPanel";
+import { ReportQr } from "@/components/painel/ReportQr";
+
 import { onWillShutdown } from "@/lib/desktop";
 import { restoreKiosk } from "@/lib/kiosk";
 import { LoginScreen } from "@/components/zeno/LoginScreen";
-import { DeviceActivationScreen, deviceActivated } from "@/components/zeno/DeviceActivationScreen";
+import { DeviceActivationScreen, deviceActivated, reconnectDevice } from "@/components/zeno/DeviceActivationScreen";
 import { isDesktop } from "@/lib/desktop";
 import { kioskEnabled } from "@/lib/kiosk";
 import { ZenoHome } from "@/components/zeno/ZenoHome";
 import { SettingsApp } from "@/components/zeno/SettingsApp";
-import type { ZenoAppId } from "@/lib/apps";
+import { categoryOfApp, type ZenoAppId } from "@/lib/apps";
 import { appState, cachedAppAccess, loadAppAccess, type AppAccessMap } from "@/lib/appAccess";
 
 
@@ -111,6 +123,7 @@ function firstNameOf(item: Student | null): string {
 
 function KidsApp() {
   const t = useT();
+  const navigate = useNavigate();
   const { lang } = useI18n();
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -125,7 +138,40 @@ function KidsApp() {
     setNeedsActivation((kioskEnabled() || isDesktop()) && !deviceActivated());
   }, [bootKey]);
 
+  // Mesa ativada que perdeu a sessão: reconecta sozinha com o código guardado.
+  const [reconnecting, setReconnecting] = useState(false);
+  const triedReconnect = useRef(false);
+  useEffect(() => {
+    if (!ready || screen !== "login" || triedReconnect.current) return undefined;
+    const code = getDeviceCode();
+    if (!deviceActivated() || !code) return undefined;
+    const run = () => {
+      triedReconnect.current = true;
+      setReconnecting(true);
+      void reconnectDevice(code).then((ok) => {
+        setReconnecting(false);
+        if (ok) {
+          setSignedIn(true);
+          setReady(false);
+          setBootKey((k) => k + 1);
+        } else {
+          setNeedsActivation((kioskEnabled() || isDesktop()) && !deviceActivated());
+        }
+      });
+    };
+    // Sem internet a mesa ativada não é bloqueada: reconecta quando a conexão voltar.
+    if (!navigator.onLine) {
+      window.addEventListener("online", run, { once: true });
+      return () => window.removeEventListener("online", run);
+    }
+    run();
+    return undefined;
+  }, [ready, screen]);
+
   const [settings, setSettings] = useState(false);
+  const [askSettings, setAskSettings] = useState(false);
+  const [newStudent, setNewStudent] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [game, setGame] = useState<CatalogGame | null>(null);
   const [level, setLevel] = useState(1);
   const [category, setCategory] = useState<string | null>(null);
@@ -142,6 +188,10 @@ function KidsApp() {
   const [sound, setSound] = useState(true);
   const [activities, setActivities] = useState<CatalogGame[]>([]);
   const [tech, setTech] = useState(false);
+  /** QR Code do relatório: criança escolhida ou seletor aberto. */
+  const [qr, setQr] = useState<{ id: string; name: string } | null>(null);
+  const [qrPick, setQrPick] = useState(false);
+
   const [access, setAccess] = useState<AppAccessMap>(() => ({}));
   const { rotation, rotate } = useRotation();
 
@@ -202,7 +252,24 @@ function KidsApp() {
         return;
       }
       setSignedIn(true);
-      setScreen("students");
+      // Voltando de um app em outra página (ex.: Tela Mágica): retorna à Home de apps.
+      const back = sessionStorage.getItem("zeno.returnHome");
+      sessionStorage.removeItem("zeno.returnHome");
+      if (back) {
+        try {
+          setStudent(JSON.parse(back) as Student);
+          setScreen("home");
+        } catch {
+          setScreen("students");
+        }
+      } else {
+        setScreen("students");
+      }
+      // Off-line: a mesa mostra imediatamente as crianças guardadas nela.
+      const savedOrg = rememberedOrg();
+      if (savedOrg) setOrgId(savedOrg);
+      const cached = listLocalStudents(savedOrg);
+      if (cached.length > 0) setStudents(cached as unknown as Student[]);
       void supabase
         .from("user_roles")
         .select("role")
@@ -214,14 +281,33 @@ function KidsApp() {
           );
           if (active) setIsAdmin(admin);
         });
-      const { data: rows } = await supabase
+      // A mesa lista apenas as crianças cadastradas na sua própria unidade.
+      // Sem internet, as consultas falham em silêncio e a lista local continua valendo.
+      const { data: ownProfile } = await supabase
+        .from("profiles")
+        .select("organization_id")
+        .eq("id", session.user.id)
+        .maybeSingle()
+        .then((r) => r, () => ({ data: null }));
+      let query = supabase
         .from("students")
         .select("id, full_name, nickname, organization_id, avatar")
-        .eq("active", true)
-        .order("full_name");
+        .eq("active", true);
+      const activeOrg = ownProfile?.organization_id ?? savedOrg;
+      if (ownProfile?.organization_id) {
+        setOrgId(ownProfile.organization_id);
+        rememberOrg(ownProfile.organization_id);
+      }
+      if (activeOrg) query = query.eq("organization_id", activeOrg);
+      const { data: rows } = await query.order("full_name").then((r) => r, () => ({ data: null }));
       if (!active) return;
-      setStudents((rows ?? []) as unknown as Student[]);
-      setPending(pendingCount());
+      if (rows) {
+        const merged = cacheServerStudents(rows as unknown as Parameters<typeof cacheServerStudents>[0]);
+        setStudents(
+          (activeOrg ? merged.filter((s) => s.organization_id === activeOrg) : merged) as unknown as Student[],
+        );
+      }
+      setPending(totalPending());
       void loadActivities().then((rows) => {
         if (active) setActivities(rows.map(activityToGame));
       });
@@ -244,7 +330,12 @@ function KidsApp() {
       setStars(0);
       return;
     }
-    const { data } = await supabase.from("game_sessions").select("score").eq("student_id", item.id);
+    // Sem internet a consulta falha: a mesa continua abrindo normalmente.
+    const { data } = await supabase
+      .from("game_sessions")
+      .select("score")
+      .eq("student_id", item.id)
+      .then((r) => r, () => ({ data: null }));
     setSessions(data?.length ?? 0);
     setStars(Math.floor((data ?? []).reduce((sum, s) => sum + (s.score ?? 0), 0) / 20));
   }
@@ -266,7 +357,7 @@ function KidsApp() {
       events: r.events ?? [],
       student_name: player.nickname || player.full_name,
     });
-    setPending(pendingCount());
+    setPending(totalPending());
     if (updateCurrentStats) {
       setSessions((s) => s + 1);
       setStars((s) => s + Math.floor(r.score / 20));
@@ -308,6 +399,14 @@ function KidsApp() {
       <main className="surface-wood flex min-h-screen items-center justify-center">
         <ZenoSays message={t("common.loading")} size="lg" />
 
+      </main>
+    );
+  }
+
+  if (screen === "login" && reconnecting) {
+    return (
+      <main className="surface-wood flex min-h-screen items-center justify-center">
+        <ZenoSays message={t("common.loading")} size="lg" />
       </main>
     );
   }
@@ -453,6 +552,18 @@ function KidsApp() {
           pending={pending}
           online={online}
           onTech={() => setTech(true)}
+          canSettings={signedIn}
+          onSettings={() => setAskSettings(true)}
+          canQr={signedIn}
+          onQr={() => {
+            if (student && student.id !== "guest") {
+              setQr({ id: student.id, name: student.nickname ?? student.full_name });
+            } else {
+              setQrPick(true);
+            }
+          }}
+
+
 
           rotation={rotation}
           sound={sound}
@@ -477,7 +588,8 @@ function KidsApp() {
             onPick={openStudent}
             onGuest={() => openStudent(GUEST)}
             signedIn={signedIn}
-            canManage={isAdmin}
+            canManage={signedIn && !!orgId}
+            onNew={() => setNewStudent(true)}
           />
         )}
 
@@ -492,7 +604,14 @@ function KidsApp() {
             onOpenApp={(app: ZenoAppId) => {
               playSfx("tap");
               if (appState(access, app) !== "ok") return;
-              if (app === "games") {
+              const cat = categoryOfApp(app);
+              if (cat) {
+                if (appState(access, "games") !== "ok") return;
+                setCategory(cat);
+                setOrigin("games");
+                setScreen("games");
+              } else if (app === "games") {
+                setCategory(null);
                 setOrigin("games");
                 setScreen("games");
               } else if (app === "literacy") {
@@ -501,10 +620,24 @@ function KidsApp() {
               } else if (app === "fonoplay") {
                 setOrigin("fonoplay");
                 setScreen("fonoplay");
+              } else if (app === "desenho") {
+                const g =
+                  activities.find((a) => a.slug === "desenho-livre") ??
+                  gameCatalog.find((a) => a.slug === "desenho-livre");
+                if (!g) return;
+                setOrigin("home");
+                setGame(g);
+                setResult(null);
+                setScreen("level");
+              } else if (app === "magica") {
+                void navigate({ to: "/tela-magica" });
+              } else if (app === "atividades") {
+                void navigate({ to: "/tela-magica", search: { view: "history" } });
               } else if (app === "settings" && isAdmin) {
                 setSettings(true);
               }
             }}
+
           />
         )}
 
@@ -521,6 +654,10 @@ function KidsApp() {
             }}
             category={category}
             onCategory={setCategory}
+            onBackHome={() => {
+              setCategory(null);
+              setScreen("home");
+            }}
             activities={activities}
             onPickStudent={() => setScreen("students")}
             onPlay={(g) => {
@@ -532,6 +669,7 @@ function KidsApp() {
             }}
           />
         )}
+
 
         {screen === "literacy" && (
           <LiteracyScreen
@@ -603,7 +741,7 @@ function KidsApp() {
         </div>
 
         <BottomNav
-          isAdmin={isAdmin}
+          isAdmin={isAdmin || signedIn}
           screen={screen}
           onSelect={(next) => {
             playSfx("tap");
@@ -613,8 +751,106 @@ function KidsApp() {
           }}
         />
 
-        {settings && isAdmin && <SettingsApp online={online} onClose={() => setSettings(false)} />}
+        {askSettings && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-3xl bg-card p-6 text-center shadow-toy">
+              <h2 className="font-display text-2xl">⚙️ {t("common.settings")}</h2>
+              <p className="mt-2 text-base text-muted-foreground">{t("common.settingsConfirm")}</p>
+              <div className="mt-5 flex justify-center gap-3">
+                <button
+                  onClick={() => {
+                    setAskSettings(false);
+                    setSettings(true);
+                  }}
+                  className="min-h-[3.25rem] rounded-full bg-zeno-blue px-6 font-display text-lg text-white active:scale-95"
+                >
+                  {t("common.yes")}
+                </button>
+                <button
+                  onClick={() => setAskSettings(false)}
+                  className="min-h-[3.25rem] rounded-full border border-border px-6 font-display text-lg active:scale-95"
+                >
+                  {t("common.no")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {newStudent && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4">
+            <div className="mx-auto w-full max-w-xl rounded-3xl bg-card p-6 shadow-toy">
+              <h2 className="font-display text-2xl">➕ {t("students.newTitle")}</h2>
+              <div className="mt-4">
+                <NewStudentForm
+                  onCancel={() => setNewStudent(false)}
+                  onSave={async (d) => {
+                    const org = orgId ?? rememberedOrg();
+                    if (!org) return;
+                    // Offline-first: a criança é gravada na mesa e enviada quando houver internet.
+                    const created = saveStudentLocal({
+                      organization_id: org,
+                      full_name: d.fullName,
+                      nickname: d.nickname,
+                      birth_date: d.birthDate,
+                      character: d.character,
+                      anamnesis: d.anamnesis,
+                      cid_codes: d.cids,
+                    });
+                    setStudents((list) => [...list, created as unknown as Student]);
+                    toast.success(t("students.saved"));
+                    setNewStudent(false);
+                    const left = await syncNow();
+                    setPending(left);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {qrPick && (
+          <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-toy">
+              <h2 className="font-display text-2xl">📱 {t("nav.reports")}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{t("students.pick")}</p>
+              <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
+                {students.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setQrPick(false);
+                      setQr({ id: s.id, name: s.nickname ?? s.full_name });
+                    }}
+                    className="flex w-full items-center gap-3 rounded-2xl border border-border p-3 text-left active:scale-95"
+                  >
+                    <img
+                      src={portraitOf(s.avatar?.character)}
+                      alt=""
+                      width={128}
+                      height={128}
+                      className={`h-10 w-10 rounded-full object-cover ${s.avatar?.color ?? "bg-zeno-blue"}`}
+                    />
+                    <span className="truncate font-display text-lg">{s.nickname ?? s.full_name}</span>
+                  </button>
+                ))}
+                {students.length === 0 && <p className="text-sm text-muted-foreground">{t("students.empty")}</p>}
+              </div>
+              <button
+                onClick={() => setQrPick(false)}
+                className="mt-4 min-h-[3.25rem] w-full rounded-full border border-border px-6 font-display text-lg active:scale-95"
+              >
+                {t("students.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {qr && <ReportQr studentId={qr.id} studentName={qr.name} onClose={() => setQr(null)} />}
+
+        {settings && <SettingsApp online={online} onClose={() => setSettings(false)} />}
         {tech && <TechPanel online={online} onClose={() => setTech(false)} />}
+
       </main>
     </RotationFrame>
   );
@@ -681,6 +917,11 @@ function TopBar({
   onHome,
   onExit,
   onTech,
+  canSettings,
+  onSettings,
+  canQr,
+  onQr,
+
 }: {
   student: Student | null;
   pending: number;
@@ -692,10 +933,16 @@ function TopBar({
   onHome: () => void;
   onExit: () => void;
   onTech: () => void;
+  canSettings: boolean;
+  onSettings: () => void;
+  canQr: boolean;
+  onQr: () => void;
+
 }) {
   const t = useT();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [unlock, setUnlock] = useState(false);
+  const syncStatus = useSyncStatus();
 
   const hold = () => {
     timer.current = setTimeout(() => setUnlock(true), 2500);
@@ -713,6 +960,16 @@ function TopBar({
         {!online && (
           <span className="rounded-full bg-zeno-orange px-4 py-2 text-sm font-semibold text-white">
             📴 {t("common.offline")}
+          </span>
+        )}
+        {online && syncStatus === "syncing" && (
+          <span className="rounded-full bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground">
+            🔄 {t("common.syncing")}
+          </span>
+        )}
+        {online && syncStatus === "synced" && pending === 0 && (
+          <span className="rounded-full bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground">
+            ☁️ {t("common.synced")}
           </span>
         )}
         {pending > 0 && (
@@ -762,6 +1019,26 @@ function TopBar({
             </span>
           </button>
         )}
+        {canQr && (
+          <button
+            onClick={onQr}
+            aria-label={t("nav.reports")}
+            title={t("nav.reports")}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-card text-2xl shadow-card active:scale-95"
+          >
+            📱
+          </button>
+        )}
+        {canSettings && (
+
+          <button
+            onClick={onSettings}
+            aria-label={t("common.settings")}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-card text-2xl shadow-card active:scale-95"
+          >
+            ⚙️
+          </button>
+        )}
         {unlock && (
           <button
             onClick={() => {
@@ -785,12 +1062,14 @@ function StudentPicker({
   onGuest,
   signedIn,
   canManage,
+  onNew,
 }: {
   students: Student[];
   onPick: (s: Student) => void;
   onGuest: () => void;
   signedIn: boolean;
   canManage: boolean;
+  onNew: () => void;
 }) {
   const t = useT();
   const [query, setQuery] = useState("");
@@ -811,12 +1090,12 @@ function StudentPicker({
           className="min-h-[3.5rem] min-w-[16rem] flex-1 rounded-full border border-border bg-card px-6 text-lg shadow-card"
         />
         {canManage && (
-          <Link
-            to="/painel"
+          <button
+            onClick={onNew}
             className="flex min-h-[3.5rem] items-center rounded-full bg-zeno-green px-6 font-display text-lg text-white shadow-card active:scale-95"
           >
             ➕ {t("students.new")}
-          </Link>
+          </button>
         )}
       </div>
 
@@ -925,6 +1204,7 @@ function GamesScreen({
   student,
   category,
   onCategory,
+  onBackHome,
   onPlay,
   activities,
   onPickStudent,
@@ -933,6 +1213,7 @@ function GamesScreen({
   student: Student | null;
   category: string | null;
   onCategory: (id: string | null) => void;
+  onBackHome: () => void;
   onPlay: (g: CatalogGame) => void;
   activities: CatalogGame[];
   onPickStudent: () => void;
@@ -945,10 +1226,25 @@ function GamesScreen({
   const dynamic = actionCatalog.map((g) => actionToGame(g, lang));
   const all = [...dynamic, ...activities, ...gameCatalog.filter((g) => !customSlugs.has(g.slug)), ...generated];
   const list = category ? all.filter((g) => categoryOf(g.slug).id === category) : all;
+  const current = category ? categories.find((c) => c.id === category) : null;
   return (
     <section className="mx-auto max-w-6xl">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-        <CategoryDial active={category} onChange={onCategory} />
+        {current ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              onClick={onBackHome}
+              className="flex h-14 shrink-0 items-center gap-2 rounded-full bg-card px-5 font-display text-lg shadow-card active:scale-95"
+            >
+              🏠 {t("common.home")}
+            </button>
+            <h2 className="truncate font-display text-2xl text-foreground sm:text-3xl">
+              {current.emoji} {current.label}
+            </h2>
+          </div>
+        ) : (
+          <CategoryDial active={category} onChange={onCategory} />
+        )}
         <button
           onClick={onPickStudent}
           aria-label={t("students.pick")}
@@ -964,11 +1260,14 @@ function GamesScreen({
         </button>
       </div>
 
-      <div className="mt-4">
-        <LiteracyAreaCard onOpen={onOpenLiteracy} />
-      </div>
+      {!current && (
+        <div className="mt-4">
+          <LiteracyAreaCard onOpen={onOpenLiteracy} />
+        </div>
+      )}
 
       <h2 className="mt-5 font-display text-2xl text-foreground sm:text-3xl">{t("games.activities")}</h2>
+
 
       <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
         {list.map((g, i) => (
@@ -1186,7 +1485,9 @@ function AvatarScreen({
       setTimeout(() => setSaved(false), 2000);
       return;
     }
-    await supabase.from("students").update({ avatar: { color, face, character } }).eq("id", student.id);
+    // Guarda na mesa (funciona off-line) e envia quando houver internet.
+    updateStudentLocal(student.id, { avatar: { color, face, character } });
+    void syncNow();
     onSave({ color, face, character });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);

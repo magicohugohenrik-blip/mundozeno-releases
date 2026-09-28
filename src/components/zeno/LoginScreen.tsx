@@ -56,7 +56,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
 
 
   return (
-    <main className="surface-kids flex min-h-screen flex-col items-center justify-center px-4 py-8">
+    <main className="surface-kids flex min-h-screen flex-col items-center justify-center px-4 py-8 pb-[45vh] sm:pb-8">
       <div className="absolute right-4 top-4">
         <LanguageSwitch compact />
       </div>

@@ -469,6 +469,95 @@ export type Database = {
         }
         Relationships: []
       }
+      magic_creations: {
+        Row: {
+          created_at: string
+          drawing_url: string | null
+          id: string
+          image_url: string | null
+          input_text: string | null
+          kind: string
+          organization_id: string | null
+          owner_id: string
+          result: Json
+          student_id: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          drawing_url?: string | null
+          id?: string
+          image_url?: string | null
+          input_text?: string | null
+          kind: string
+          organization_id?: string | null
+          owner_id?: string
+          result?: Json
+          student_id?: string | null
+          title?: string
+        }
+        Update: {
+          created_at?: string
+          drawing_url?: string | null
+          id?: string
+          image_url?: string | null
+          input_text?: string | null
+          kind?: string
+          organization_id?: string | null
+          owner_id?: string
+          result?: Json
+          student_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "magic_creations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "magic_creations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      magic_shares: {
+        Row: {
+          created_at: string
+          created_by: string
+          creation_id: string
+          expires_at: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          creation_id: string
+          expires_at: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          creation_id?: string
+          expires_at?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "magic_shares_creation_id_fkey"
+            columns: ["creation_id"]
+            isOneToOne: false
+            referencedRelation: "magic_creations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       municipalities: {
         Row: {
           active: boolean

@@ -37,3 +37,10 @@ contextBridge.exposeInMainWorld("mundoZenoUpdater", {
 contextBridge.exposeInMainWorld("mundoZenoSystem", {
   openWifiSettings: () => ipcRenderer.invoke("zeno:wifi"),
 });
+
+// Tela "sem internet": botões de voltar ao início e tentar de novo.
+contextBridge.exposeInMainWorld("zenoOffline", {
+  goHome: () => ipcRenderer.invoke("zeno:offline:home"),
+  retry: () => ipcRenderer.invoke("zeno:offline:retry"),
+});
+

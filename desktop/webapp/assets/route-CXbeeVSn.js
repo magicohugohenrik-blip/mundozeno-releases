@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-CV_KdMnE.js";import{Q as t}from"./index-Du2DiytO.js";var n=e(),r=()=>(0,n.jsx)(t,{});export{r as component};

@@ -13,13 +13,16 @@ export const activateDevice = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const code = data.code.trim().toUpperCase();
+    // Tolerante à digitação: ignora maiúsculas/minúsculas, espaços e traços.
+    const normalized = data.code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-    const { data: device } = await supabaseAdmin
+    const { data: candidates } = await supabaseAdmin
       .from("devices")
-      .select("id, code, label, location, status, organization_id, auth_user_id")
-      .eq("code", code)
-      .maybeSingle();
+      .select("id, code, label, location, status, organization_id, auth_user_id");
+
+    const device = (candidates ?? []).find(
+      (d) => (d.code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "") === normalized,
+    );
 
     if (!device) return { ok: false as const, reason: "not_found" as const };
     if (device.status === "blocked") return { ok: false as const, reason: "blocked" as const };

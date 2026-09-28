@@ -18,7 +18,9 @@ export function GameTile({
 }) {
   const t = useT();
   const category = categoryOf(game.slug);
-  const title = game.customTitle ?? t(`game.${game.slug}.title` as TKey);
+  const key = `game.${game.slug}.title`;
+  const tr = t(key as TKey);
+  const title = game.customTitle ?? (tr && tr !== key ? tr : game.title);
   const categoryLabel = t(`category.${category.id}` as TKey);
   const illustration = gameArt[game.slug];
 

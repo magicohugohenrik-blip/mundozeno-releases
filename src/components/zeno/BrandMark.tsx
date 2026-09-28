@@ -7,7 +7,7 @@ export function BrandMark({ className = "" }: { className?: string }) {
       alt="Mundo Zeno — Mesa Interativa"
       width={1536}
       height={1024}
-      className={`h-14 w-auto object-contain sm:h-16 ${className}`}
+      className={`h-14 w-auto rounded-3xl object-contain sm:h-16 ${className}`}
     />
   );
 }

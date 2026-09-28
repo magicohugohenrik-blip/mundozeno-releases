@@ -55,13 +55,27 @@ export function activityToGame(row: ActivityRow): CatalogGame {
 
 /** Atividades personalizadas visíveis para a mesa (instituição do usuário logado). */
 export async function loadActivities(): Promise<ActivityRow[]> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return readCachedActivities();
   const { data, error } = await supabase
     .from("activities")
     .select(ACTIVITY_SELECT)
     .eq("active", true)
     .order("created_at", { ascending: false });
-  if (error) return [];
-  return (data ?? []) as unknown as ActivityRow[];
+  if (error) return readCachedActivities();
+  const rows = (data ?? []) as unknown as ActivityRow[];
+  try {
+    localStorage.setItem(ACTIVITIES_CACHE, JSON.stringify(rows));
+  } catch {}
+  return rows;
+}
+
+const ACTIVITIES_CACHE = "zeno_activities_local";
+function readCachedActivities(): ActivityRow[] {
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVITIES_CACHE) ?? "[]") as ActivityRow[];
+  } catch {
+    return [];
+  }
 }
 
 /** Configuração inicial ao duplicar um jogo oficial. */

@@ -203,17 +203,7 @@ export function AdminArea({ isSuper, currentOrgId, onSwitchOrg }: { isSuper: boo
       )}
 
       {sub === "mesas" && (
-        <div className="space-y-6">
-          <NewTableWizard munis={munis} orgs={orgs} onDone={load} />
-          <section>
-            <h2 className="font-display text-xl">Mesas ({devices.length})</h2>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {devices.map((d) => (
-                <DeviceCard key={d.id} device={d} isSuper={isSuper} orgName={orgs.find((o) => o.id === d.organization_id)?.name ?? "Sem instituição"} onDone={load} />
-              ))}
-            </div>
-          </section>
-        </div>
+        <TablesArea munis={munis} orgs={orgs} devices={devices} isSuper={isSuper} onDone={load} />
       )}
 
       {sub === "gestores" && (
@@ -684,14 +674,114 @@ const DEVICE_STATUS: Record<string, { label: string; cls: string }> = {
   blocked: { label: "Bloqueada", cls: "bg-destructive/20 text-foreground" },
 };
 
+/** Lista de mesas com busca por código, nome, instituição ou município + criação retrátil. */
+function TablesArea({
+  munis,
+  orgs,
+  devices,
+  isSuper,
+  onDone,
+}: {
+  munis: Municipality[];
+  orgs: OrgRow[];
+  devices: DeviceRow[];
+  isSuper: boolean;
+  onDone: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const norm = (v: string) =>
+    v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const enriched = useMemo(
+    () =>
+      devices.map((d) => {
+        const org = orgs.find((o) => o.id === d.organization_id);
+        const muni = munis.find((m) => m.id === org?.municipality_id);
+        return {
+          device: d,
+          orgName: org?.name ?? "Sem instituição",
+          muniName: muni?.name ?? org?.city ?? "",
+        };
+      }),
+    [devices, orgs, munis],
+  );
+
+  const filtered = useMemo(() => {
+    const q = norm(query.trim());
+    if (!q) return enriched;
+    return enriched.filter((e) =>
+      norm(
+        [e.device.code, e.device.label ?? "", e.device.location ?? "", e.orgName, e.muniName].join(" "),
+      ).includes(q),
+    );
+  }, [enriched, query]);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-xl">Mesas ({devices.length})</h2>
+        <button
+          type="button"
+          onClick={() => setCreating((v) => !v)}
+          className="rounded-full bg-zeno-blue px-5 py-2 text-sm font-semibold text-white"
+        >
+          {creating ? "Fechar" : "+ Criar nova mesa"}
+        </button>
+      </div>
+
+      {creating && (
+        <NewTableWizard
+          munis={munis}
+          orgs={orgs}
+          onDone={() => {
+            onDone();
+          }}
+        />
+      )}
+
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Buscar por código, nome da mesa, instituição ou município…"
+        className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-base"
+      />
+
+      {filtered.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          {devices.length === 0
+            ? "Nenhuma mesa cadastrada ainda. Use “+ Criar nova mesa”."
+            : "Nenhuma mesa encontrada para essa busca."}
+        </p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((e) => (
+            <DeviceCard
+              key={e.device.id}
+              device={e.device}
+              isSuper={isSuper}
+              orgName={e.orgName}
+              muniName={e.muniName}
+              onDone={onDone}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeviceCard({
   device,
   orgName,
+  muniName = "",
   onDone,
   isSuper = false,
 }: {
   device: DeviceRow;
   orgName: string;
+  muniName?: string;
   onDone: () => void;
   isSuper?: boolean;
 }) {
@@ -729,8 +819,12 @@ function DeviceCard({
         <h3 className="font-display text-lg">{device.label || "Mesa"}</h3>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${st.cls}`}>{st.label}</span>
       </div>
-      <p className="font-mono text-xs text-muted-foreground">{device.code}</p>
-      <p className="mt-1 text-sm">{orgName}</p>
+      <div className="mt-2 rounded-xl bg-secondary px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Código da mesa</p>
+        <p className="font-mono text-lg font-bold tracking-wider">{device.code}</p>
+      </div>
+      <p className="mt-2 text-sm">{orgName}</p>
+      {muniName && <p className="text-xs text-muted-foreground">Município: {muniName}</p>}
       {device.location && <p className="text-xs text-muted-foreground">Local: {device.location}</p>}
       <p className="text-xs text-muted-foreground">Versão: {device.app_version ?? "—"}</p>
       <p className="text-xs text-muted-foreground">
@@ -840,7 +934,7 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
                       : "Sem prazo"}
               </span>
               {isSuper && (
-                <span className="flex gap-2">
+                <span className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     disabled={busy}
@@ -853,16 +947,35 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      const next = new Date();
-                      next.setFullYear(next.getFullYear() + 1);
+                      const answer = window.prompt("Liberar por quantos dias? (deixe vazio para sem prazo)", "365");
+                      if (answer === null) return;
+                      const days = Number(answer.trim());
+                      if (answer.trim() === "") {
+                        void update(row.app_id, { enabled: true, expires_at: null });
+                        return;
+                      }
+                      if (!Number.isFinite(days) || days < 1) {
+                        toast.error("Informe um número de dias válido.");
+                        return;
+                      }
+                      const next = new Date(Date.now() + days * 86400000);
                       void update(row.app_id, { enabled: true, expires_at: next.toISOString() });
                     }}
                     className="rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60"
                   >
-                    +1 ano
+                    Prazo…
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void update(row.app_id, { enabled: true, expires_at: null })}
+                    className="rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60"
+                  >
+                    Sem prazo
                   </button>
                 </span>
               )}
+
             </li>
           );
         })}

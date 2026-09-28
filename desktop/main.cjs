@@ -3,13 +3,80 @@
  * Abre a plataforma em tela cheia/quiosque, sem barra de tarefas nem menus,
  * e mantém os dados locais da mesa entre atualizações.
  */
-const { app, BrowserWindow, ipcMain, session, shell, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, session, shell, dialog, protocol, net } = require("electron");
+const { pathToFileURL } = require("node:url");
 const path = require("node:path");
+const fs = require("node:fs");
 const { exec } = require("node:child_process");
 const { autoUpdater } = require("electron-updater");
 
 const APP_URL = process.env.ZENO_URL || "https://turmadozeno.lovable.app";
 const isDev = !app.isPackaged;
+
+// Modo offline: se a pasta "webapp" vier embutida no instalador, a aplicação
+// é carregada dos arquivos locais e não depende da internet nem do Lovable.
+// Sem ela, cai no site publicado (comportamento atual da versão web).
+const LOCAL_INDEX = path.join(__dirname, "webapp", "index.html");
+const OFFLINE_PAGE = path.join(__dirname, "offline.html");
+const hasLocalApp = fs.existsSync(LOCAL_INDEX);
+
+function loadApp(target) {
+  if (hasLocalApp) return target.loadURL(LOCAL_ORIGIN + "/");
+  return target.loadURL(APP_URL);
+}
+
+/** Tela amigável de "sem internet", com botão de voltar para o início. */
+function loadOfflinePage(target) {
+  if (fs.existsSync(OFFLINE_PAGE)) return target.loadFile(OFFLINE_PAGE);
+  return loadApp(target);
+}
+
+
+/**
+ * Os arquivos locais são servidos por "zeno-app://mesa/", uma origem própria:
+ * caminhos absolutos ("/assets/...", "/app-covers/...") e rotas internas
+ * resolvem dentro de webapp/, sem cair na raiz do disco (C:\\) do Windows.
+ */
+const WEBAPP_DIR = path.join(__dirname, "webapp");
+const LOCAL_ORIGIN = "zeno-app://mesa";
+protocol.registerSchemesAsPrivileged([
+  { scheme: "zeno-app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+]);
+function installLocalFileRedirect() {
+  if (!hasLocalApp || installLocalFileRedirect.done) return;
+  installLocalFileRedirect.done = true;
+  protocol.handle("zeno-app", async (request) => {
+    const reqUrl = new URL(request.url);
+    // Funções do servidor (ativação da mesa, sincronização) vão para o site publicado.
+    if (reqUrl.pathname.startsWith("/_serverFn/") || reqUrl.pathname.startsWith("/api/")) {
+      const remote = APP_URL.replace(/\/+$/, "") + reqUrl.pathname + reqUrl.search;
+      const headers = new Headers(request.headers);
+      // Proteção CSRF do servidor: a chamada precisa parecer vir do próprio site.
+      const appOrigin = new URL(APP_URL).origin;
+      headers.set("origin", appOrigin);
+      headers.set("referer", appOrigin + "/");
+      const hasBody = !["GET", "HEAD"].includes(request.method);
+      try {
+        return await net.fetch(remote, {
+          method: request.method,
+          headers,
+          body: hasBody ? await request.arrayBuffer() : undefined,
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: "offline", message: String(error) }), {
+          status: 503,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+    let rel = decodeURIComponent(reqUrl.pathname).replace(/^\/+/, "");
+    let file = path.normalize(path.join(WEBAPP_DIR, rel));
+    if (!file.startsWith(WEBAPP_DIR) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      file = LOCAL_INDEX; // rotas internas do app (/, /painel, ...) abrem o index
+    }
+    return net.fetch(pathToFileURL(file).toString());
+  });
+}
 
 let win = null;
 
@@ -26,6 +93,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function createWindow() {
+  installLocalFileRedirect();
   win = new BrowserWindow({
     show: false,
     fullscreen: true,
@@ -43,19 +111,33 @@ function createWindow() {
 
   win.setMenuBarVisibility(false);
   win.once("ready-to-show", () => win.show());
-  win.loadURL(APP_URL);
+  loadApp(win);
 
   // A criança nunca sai do aplicativo: links externos são bloqueados.
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith(APP_URL)) event.preventDefault();
+    if (!hasLocalApp && !url.startsWith(APP_URL)) event.preventDefault();
   });
 
-  // Sem internet no primeiro carregamento: tenta de novo em 5s.
-  win.webContents.on("did-fail-load", () => {
-    setTimeout(() => win && win.loadURL(APP_URL), 5000);
+  // Sem internet: mostra a tela amigável com "Voltar para o início".
+  // Em modo local (offline pronto), só acontece se a própria página falhar.
+  win.webContents.on("did-fail-load", (_e, _code, _desc, _url, isMainFrame) => {
+    if (isMainFrame && win) loadOfflinePage(win);
   });
 }
+
+/* ------- Tela "sem internet" ------- */
+
+ipcMain.handle("zeno:offline:home", () => {
+  if (win) loadApp(win);
+  return true;
+});
+
+ipcMain.handle("zeno:offline:retry", () => {
+  if (win) loadApp(win);
+  return true;
+});
+
 
 app.whenReady().then(() => {
   // Tela sempre acesa e sem pedidos de permissão intrusivos.

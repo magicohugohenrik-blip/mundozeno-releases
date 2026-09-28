@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import { appsFor, type ZenoApp, type ZenoAppId } from "@/lib/apps";
 import { appState, type AppAccessMap } from "@/lib/appAccess";
@@ -26,6 +27,7 @@ export function ZenoHome({
   onSwitchChild: () => void;
 }) {
   const t = useT();
+  const [broken, setBroken] = useState<Record<string, boolean>>({});
   const apps: ZenoApp[] = appsFor(isAdmin);
   const map: AppAccessMap = access ?? {};
 
@@ -58,8 +60,11 @@ export function ZenoHome({
 
       <div className="mt-4 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
         {apps.map((app, i) => {
-          const state = appState(map, app.id);
+          // Aplicativos de categoria herdam a liberação geral dos jogos.
+          const own = appState(map, app.id);
+          const state = app.category && own === "ok" ? appState(map, "games") : own;
           const locked = state !== "ok";
+
           return (
             <motion.button
               key={app.id}
@@ -69,16 +74,35 @@ export function ZenoHome({
               whileTap={{ scale: locked ? 1 : 0.95 }}
               disabled={locked}
               onClick={() => !locked && onOpenApp(app.id)}
-              className={`relative min-h-[11rem] overflow-hidden rounded-[2rem] p-6 text-left text-white shadow-toy ${app.color} ${
+              aria-label={`${t(app.titleKey)} — ${locked ? t(state === "expired" ? "home.expired" : "home.locked") : t(app.descKey)}`}
+              className={`relative aspect-square min-h-[11rem] overflow-hidden rounded-[2rem] text-left text-primary-foreground shadow-toy ${app.color} ${
                 locked ? "opacity-60 grayscale" : ""
               }`}
             >
-              <span className="pattern-stars absolute inset-0 opacity-25" />
-              <span className="relative block text-6xl leading-none">{locked ? "🔒" : app.emoji}</span>
-              <span className="relative mt-4 block font-display text-2xl leading-tight">{t(app.titleKey)}</span>
-              <span className="relative mt-1 block text-sm opacity-90">
-                {locked ? t(state === "expired" ? "home.expired" : "home.locked") : t(app.descKey)}
-              </span>
+              {app.coverUrl && !broken[app.id] ? (
+                <img
+                  onError={() => setBroken((b) => ({ ...b, [app.id]: true }))}
+                  src={app.coverUrl}
+                  alt=""
+                  className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill"
+                  draggable={false}
+                />
+              ) : (
+                <>
+                  <span className="pattern-stars absolute inset-0 opacity-25" />
+                  <span className="relative block p-6 text-6xl leading-none">{app.emoji}</span>
+                  <span className="relative block px-6 font-display text-2xl leading-tight">{t(app.titleKey)}</span>
+                  <span className="relative mt-1 block px-6 text-sm opacity-90">{t(app.descKey)}</span>
+                </>
+              )}
+              {locked && (
+                <span className="absolute inset-0 flex flex-col items-center justify-center bg-foreground/55 p-4 text-center">
+                  <span className="text-5xl" aria-hidden="true">🔒</span>
+                  <span className="mt-2 font-display text-lg">
+                    {t(state === "expired" ? "home.expired" : "home.locked")}
+                  </span>
+                </span>
+              )}
             </motion.button>
           );
         })}

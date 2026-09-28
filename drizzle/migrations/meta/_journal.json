@@ -8,6 +8,34 @@
       "when": 1790036665845,
       "tag": "0000_network_hierarchy_and_report_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790125974428,
+      "tag": "0001_grant_manages_device_to_authenticated",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790126989172,
+      "tag": "0002_bind_device_accounts_to_own_org",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790386161068,
+      "tag": "0003_magic_creations",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790466633518,
+      "tag": "0004_magic_shares",
+      "breakpoints": true
     }
   ]
 }

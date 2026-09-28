@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { toast } from "sonner";
+import { NewStudentForm } from "@/components/zeno/NewStudentForm";
+import { createStudentFromShare } from "@/lib/report-share.functions";
 import {
   Bar,
   BarChart,
@@ -45,11 +49,14 @@ function gameTitle(slug: string): string {
 function MobileReport() {
   const { token } = Route.useParams();
   const fetchReport = useServerFn(readSharedReport);
+  const addStudent = useServerFn(createStudentFromShare);
+  const [showForm, setShowForm] = useState(false);
   const { data, isPending } = useQuery({
     queryKey: ["shared-report", token],
     queryFn: () => fetchReport({ data: { token } }),
     refetchInterval: 60_000,
   });
+
 
   if (isPending) {
     return <Shell><p className="text-muted-foreground">Carregando relatório…</p></Shell>;
@@ -83,6 +90,53 @@ function MobileReport() {
         <h1 className="font-display text-3xl leading-tight">{r.student.nickname || r.student.name}</h1>
         {r.organization && <p className="text-sm text-muted-foreground">{r.organization}</p>}
       </header>
+
+      <section className="rounded-2xl border border-border bg-card p-4">
+        {showForm ? (
+          <>
+            <h2 className="font-display text-lg">➕ Cadastrar criança</h2>
+            <p className="mb-3 mt-1 text-xs text-muted-foreground">
+              A criança entra na lista desta mesa e já pode jogar.
+            </p>
+            <NewStudentForm
+              onCancel={() => setShowForm(false)}
+              onSave={async (d) => {
+                const res = await addStudent({
+                  data: {
+                    token,
+                    fullName: d.fullName,
+                    nickname: d.nickname,
+                    birthDate: d.birthDate,
+                    character: d.character,
+                    ...(d.anamnesis ? { anamnesis: d.anamnesis } : {}),
+                    ...(d.cids ? { cids: d.cids } : {}),
+                  },
+                });
+
+                if (!res.ok) {
+                  toast.error(
+                    res.reason === "expired"
+                      ? "Este link expirou. Gere um novo QR Code na mesa."
+                      : "Este link não é mais válido.",
+                  );
+                  return;
+                }
+                toast.success(`${res.name} cadastrado(a)!`);
+                setShowForm(false);
+              }}
+            />
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="w-full rounded-xl bg-zeno-green px-5 py-3 font-display text-base text-white active:scale-95"
+          >
+            ➕ Cadastrar nova criança
+          </button>
+        )}
+      </section>
+
 
       <div className="grid grid-cols-2 gap-3">
         <Kpi label="Atividades" value={String(r.totals.sessions)} />

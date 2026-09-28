@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
+import { Route as AuthenticatedTelaMagicaRouteImport } from './routes/_authenticated/tela-magica'
 import { Route as MTokenRouteImport } from './routes/m.$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -34,6 +35,11 @@ const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTelaMagicaRoute = AuthenticatedTelaMagicaRouteImport.update({
+  id: '/tela-magica',
+  path: '/tela-magica',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const MTokenRoute = MTokenRouteImport.update({
   id: '/m/$token',
   path: '/m/$token',
@@ -44,12 +50,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/painel': typeof AuthenticatedPainelRoute
+  '/tela-magica': typeof AuthenticatedTelaMagicaRoute
   '/m/$token': typeof MTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/painel': typeof AuthenticatedPainelRoute
+  '/tela-magica': typeof AuthenticatedTelaMagicaRoute
   '/m/$token': typeof MTokenRoute
 }
 export interface FileRoutesById {
@@ -58,19 +66,21 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
+  '/_authenticated/tela-magica': typeof AuthenticatedTelaMagicaRoute
   '/m/$token': typeof MTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/painel' | '/m/$token'
+  fullPaths: '/' | '/auth' | '/painel' | '/tela-magica' | '/m/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/painel' | '/m/$token'
+  to: '/' | '/auth' | '/painel' | '/tela-magica' | '/m/$token'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/painel'
+    | '/_authenticated/tela-magica'
     | '/m/$token'
   fileRoutesById: FileRoutesById
 }
@@ -111,6 +121,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPainelRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/tela-magica': {
+      id: '/_authenticated/tela-magica'
+      path: '/tela-magica'
+      fullPath: '/tela-magica'
+      preLoaderRoute: typeof AuthenticatedTelaMagicaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/m/$token': {
       id: '/m/$token'
       path: '/m/$token'
@@ -123,10 +140,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
+  AuthenticatedTelaMagicaRoute: typeof AuthenticatedTelaMagicaRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
+  AuthenticatedTelaMagicaRoute: AuthenticatedTelaMagicaRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

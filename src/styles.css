@@ -190,6 +190,27 @@
   background-size: 360px 360px, 320px 320px, 400px 400px, 340px 340px, 280px 280px, 100% 100%;
 }
 
+/* Ambiente de trabalho da Tela Mágica: neutro e sóbrio, estilo estúdio. */
+@utility surface-studio {
+  background-color: oklch(0.955 0.006 260);
+  background-image:
+    radial-gradient(circle at 12% 0%, oklch(0.593 0.161 300.1 / 0.12), transparent 55%),
+    radial-gradient(circle at 92% 8%, oklch(0.629 0.154 144.2 / 0.1), transparent 50%),
+    linear-gradient(180deg, oklch(0.975 0.004 260), oklch(0.93 0.01 260));
+}
+
+/* Papel do quadro: leve grade pontilhada para desenho e escrita. */
+@utility studio-paper {
+  background-color: oklch(1 0 0);
+  background-image: radial-gradient(circle, oklch(0.55 0.02 260 / 0.16) 0 1.2px, transparent 1.6px);
+  background-size: 28px 28px;
+}
+
+@utility magic-cta {
+  background-image: linear-gradient(135deg, var(--zeno-purple), oklch(0.66 0.17 330));
+  box-shadow: 0 12px 28px -12px oklch(0.593 0.161 300.1 / 0.75);
+}
+
 @keyframes zeno-float {
   0%,
   100% {

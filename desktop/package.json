@@ -7,6 +7,7 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
+    "sync-web": "node ./sync-web.cjs",
     "dist": "electron-builder --win nsis"
   },
   "dependencies": {
@@ -19,7 +20,7 @@
   "build": {
     "appId": "br.com.mundozeno.mesa",
     "productName": "Mundo Zeno",
-    "files": ["main.cjs", "preload.cjs", "node_modules/**/*"],
+    "files": ["main.cjs", "preload.cjs", "offline.html", "webapp/**/*", "node_modules/**/*"],
     "publish": {
       "provider": "github",
       "owner": "magicohugohenrik-blip",

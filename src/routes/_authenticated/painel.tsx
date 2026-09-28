@@ -4,12 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { BrandMark } from "@/components/zeno/BrandMark";
 import { avatarCharacters, gameCatalog, portraitOf } from "@/lib/zeno";
 import { createOrg, joinOrg } from "@/lib/org.functions";
-import { appVersion, generateDeviceCode, getDeviceCode, setDeviceCode } from "@/lib/session-sync";
+import { getDeviceCode } from "@/lib/session-sync";
 import { toast } from "sonner";
-import { Activities } from "@/components/painel/Activities";
 import { Diagnostics } from "@/components/painel/Diagnostics";
 import { ReportQr } from "@/components/painel/ReportQr";
 import { AdminArea } from "@/components/painel/AdminArea";
+import { OfflineReports } from "@/components/painel/OfflineReports";
 import { AnamnesisForm } from "@/components/painel/AnamnesisForm";
 import { anamnesisFilled, type Anamnesis } from "@/lib/anamnesis";
 
@@ -35,7 +35,7 @@ interface Klass { id: string; name: string; age_range: string | null }
 interface Student { id: string; full_name: string; nickname: string | null; class_id: string | null; avatar?: { character?: string } | null; anamnesis?: Anamnesis | null; cid_codes?: string[] | null; birth_date?: string | null }
 interface Session { game_slug: string; score: number; hits: number; misses: number; level: number; played_at: string; student_id: string }
 
-type Tab = "turmas" | "criancas" | "atividades" | "diagnostico" | "relatorios" | "mesas" | "admin";
+type Tab = "turmas" | "criancas" | "diagnostico" | "relatorios" | "mesas" | "admin";
 
 function Painel() {
   const navigate = useNavigate();
@@ -47,10 +47,25 @@ function Painel() {
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [tab, setTab] = useState<Tab>("turmas");
   const [roles, setRoles] = useState<string[]>([]);
+  const [offline, setOffline] = useState(false);
 
   const load = useCallback(async () => {
+    setOffline(false);
+    setLoading(true);
+    // Sem internet: nem tenta a rede, vai direto ao relatório salvo na mesa.
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setOffline(true);
+      setLoading(false);
+      return;
+    }
+    try {
     const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return;
+    if (!auth.user) {
+      // Offline (ou token sem rede): mostra o relatório guardado na mesa.
+      setOffline(true);
+      setLoading(false);
+      return;
+    }
     const [{ data: profile }, { data: roleRows }] = await Promise.all([
       supabase.from("profiles").select("organization_id").eq("id", auth.user.id).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", auth.user.id),
@@ -74,6 +89,11 @@ function Painel() {
     setSessions((g.data ?? []) as Session[]);
     setDevices(d.data ?? []);
     setLoading(false);
+    } catch {
+      // Sem internet: mostramos o relatório local em vez de uma tela vazia.
+      setOffline(true);
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -81,6 +101,11 @@ function Painel() {
   }, [load]);
 
   async function signOut() {
+    // Mesa ativada: "Sair" só volta para as crianças, sem desligar a mesa da conta.
+    if (typeof window !== "undefined" && window.localStorage.getItem("zeno_device_activated") === "1") {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
     await supabase.auth.signOut();
     void navigate({ to: "/auth", replace: true });
   }
@@ -89,9 +114,21 @@ function Painel() {
     return <main className="flex min-h-screen items-center justify-center bg-background">Carregando painel…</main>;
   }
 
+  if (offline) {
+    return <OfflineReports onRetry={() => void load()} />;
+  }
+
   const isSuper = roles.includes("super_admin");
-  const isAdmin = isSuper || roles.includes("city_admin");
-  const nav: [Tab, string, string][] = isAdmin ? [...NAV, ["admin", "Administração", "🏛️"]] : NAV;
+  const isAdmin = isSuper;
+  // Gestores (município, rede ou instituição) acompanham as mesas do seu escopo.
+  // Uma mesa (papel "professional") nunca administra mesas.
+  const canSeeDevices =
+    isSuper || roles.includes("city_admin") || roles.includes("org_admin") || roles.includes("table_manager");
+  const nav: [Tab, string, string][] = [
+    ...NAV,
+    ...(canSeeDevices ? ([["mesas", "Mesas", "🪵"]] as [Tab, string, string][]) : []),
+    ...(isAdmin ? ([["admin", "Administração", "🏛️"]] as [Tab, string, string][]) : []),
+  ];
 
   if (!org) {
     if (isAdmin) {
@@ -184,10 +221,9 @@ function Painel() {
         <div className="px-6 py-6 pb-16">
           {tab === "turmas" && <Classes org={org} classes={classes} students={students} reload={load} />}
           {tab === "criancas" && <Students org={org} classes={classes} students={students} reload={load} />}
-          {tab === "atividades" && <Activities orgId={org.id} />}
           {tab === "diagnostico" && <Diagnostics students={students} />}
           {tab === "relatorios" && <Reports students={students} sessions={sessions} />}
-          {tab === "mesas" && <Devices org={org} devices={devices} reload={load} />}
+          {tab === "mesas" && canSeeDevices && <Devices devices={devices} isSuper={isSuper} />}
           {tab === "admin" && isAdmin && <AdminArea isSuper={isSuper} currentOrgId={org.id} onSwitchOrg={load} />}
         </div>
       </main>
@@ -198,10 +234,8 @@ function Painel() {
 const NAV: [Tab, string, string][] = [
   ["turmas", "Turmas", "🏫"],
   ["criancas", "Crianças", "🧒"],
-  ["atividades", "Atividades", "🧩"],
   ["diagnostico", "Relatório", "🧠"],
   ["relatorios", "Gráficos", "📊"],
-  ["mesas", "Mesas", "🪵"],
 ];
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -786,80 +820,24 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: "Bloqueada",
 };
 
-function Devices({ org, devices, reload }: { org: Org; devices: DeviceInfo[]; reload: () => void }) {
-  const [label, setLabel] = useState("");
-  const [activation, setActivation] = useState("");
-  const [current, setCurrent] = useState(() => getDeviceCode());
-
-  async function activate(e: React.FormEvent) {
-    e.preventDefault();
-    const code = activation.trim().toUpperCase();
-    if (code.length < 4) {
-      toast.error("Informe o código gerado no painel do administrador.");
-      return;
-    }
-    const { data, error } = await supabase.from("devices").select("id, label, status").eq("code", code).maybeSingle();
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    if (!data) {
-      toast.error("Código não encontrado para esta instituição.");
-      return;
-    }
-    if (data.status === "blocked") {
-      toast.error("Esta mesa está bloqueada pelo administrador.");
-      return;
-    }
-    await supabase
-      .from("devices")
-      .update({ status: "active", activated_at: new Date().toISOString(), app_version: appVersion(), last_seen_at: new Date().toISOString() })
-      .eq("id", data.id);
-    setCurrent(setDeviceCode(code));
-    setActivation("");
-    toast.success(`Mesa ativada como ${data.label ?? "Mesa"}!`);
-    reload();
-  }
-
-  async function register(e: React.FormEvent) {
-    e.preventDefault();
-    const code = generateDeviceCode();
-    const { error } = await supabase.from("devices").insert({
-      organization_id: org.id,
-      code,
-      label: label || "Mesa",
-      status: "active",
-      activated_at: new Date().toISOString(),
-      app_version: appVersion(),
-      last_seen_at: new Date().toISOString(),
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setCurrent(setDeviceCode(code));
-    setLabel("");
-    reload();
-  }
+/**
+ * Acompanhamento das mesas do próprio escopo (instituição, rede ou município).
+ * Apenas consulta: a criação de mesas acontece somente no assistente do
+ * super administrador, que também gera código e credenciais.
+ */
+function Devices({ devices, isSuper }: { devices: DeviceInfo[]; isSuper: boolean }) {
+  const current = getDeviceCode();
 
   return (
     <div className="space-y-6">
       <Card>
         <p className="text-sm text-muted-foreground">Código desta mesa</p>
         <p className="font-mono text-lg">{current}</p>
-        <form onSubmit={activate} className="mt-4 flex flex-wrap gap-3">
-          <input
-            value={activation}
-            onChange={(e) => setActivation(e.target.value.toUpperCase())}
-            placeholder="Ativar esta mesa (código do administrador)"
-            className={inputCls}
-          />
-          <button className="rounded-full bg-zeno-blue px-6 py-2 font-semibold text-white">Ativar</button>
-        </form>
-        <form onSubmit={register} className="mt-3 flex flex-wrap gap-3">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nome da mesa (ex.: Sala Azul)" className={inputCls} />
-          <button className="rounded-full bg-zeno-green px-6 py-2 font-semibold text-white">Gerar código para esta mesa</button>
-        </form>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {isSuper
+            ? "Para cadastrar uma nova mesa, use a aba Administração › Mesas."
+            : "Aqui você acompanha apenas as mesas da sua unidade. Novas mesas são criadas pela equipe Mundo Zeno."}
+        </p>
       </Card>
       <div className="grid gap-4 sm:grid-cols-3">
         {devices.map((d) => (

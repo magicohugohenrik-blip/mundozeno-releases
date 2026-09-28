@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { GameEvent } from "@/lib/gameTelemetry";
 import { logLocalPlay } from "@/lib/local-report";
 import { desktopVersion } from "@/lib/desktop";
+import { flushStudents } from "@/lib/local-students";
 
 /** Versão usada só quando a mesa roda no navegador (sem o aplicativo instalado). */
 const WEB_VERSION = "web";
@@ -119,6 +120,8 @@ export async function recordSession(session: PendingSession): Promise<void> {
 
 export async function flushQueue(): Promise<number> {
   if (typeof window === "undefined" || !navigator.onLine) return read().length;
+  // As crianças cadastradas off-line vão primeiro: as partidas dependem delas.
+  await flushStudents();
   const queue = read();
   if (queue.length === 0) return 0;
   const rows = queue.map(({ events: _events, student_name: _name, ...rest }) => ({
