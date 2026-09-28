@@ -46,6 +46,8 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Motivo técnico curto, para o suporte saber por que a ativação falhou.
+  const [detail, setDetail] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   useEffect(() => {
@@ -68,6 +70,7 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
       return;
     }
     setLoading(true);
+    setDetail(null);
     try {
       const res = await activateDevice({ data: { code: code.trim().toUpperCase() } });
       if (!res.ok) {
@@ -85,13 +88,15 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
         type: "magiclink",
       });
       if (otpError) {
+        setDetail(`login: ${otpError.message}`);
         setError(t("activation.error"));
         return;
       }
       setDeviceCode(res.code);
       window.localStorage.setItem(ACTIVE_KEY, "1");
       onActivated();
-    } catch {
+    } catch (err) {
+      setDetail(`servidor: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200));
       setError(navigator.onLine ? t("activation.error") : t("activation.offline"));
     } finally {
       setLoading(false);
@@ -148,6 +153,7 @@ export function DeviceActivationScreen({ onActivated }: { onActivated: () => voi
           {error && (
             <div className="space-y-3 rounded-2xl bg-destructive/10 px-4 py-3 text-center">
               <p className="font-semibold text-destructive">{error}</p>
+              {detail && <p className="break-all text-xs text-muted-foreground">{detail}</p>}
               <button
                 type="button"
                 onClick={() => void submit()}
