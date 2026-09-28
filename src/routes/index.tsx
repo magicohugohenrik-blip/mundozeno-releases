@@ -59,6 +59,7 @@ import { ZenoHome } from "@/components/zeno/ZenoHome";
 import { SettingsApp } from "@/components/zeno/SettingsApp";
 import { categoryOfApp, type ZenoAppId } from "@/lib/apps";
 import { appState, cachedAppAccess, loadAppAccess, type AppAccessMap } from "@/lib/appAccess";
+import { withTimeout } from "@/lib/timeout";
 
 
 export const Route = createFileRoute("/")({
@@ -148,7 +149,8 @@ function KidsApp() {
     const run = () => {
       triedReconnect.current = true;
       setReconnecting(true);
-      void reconnectDevice(code).then((ok) => {
+      // Reconexão com prazo: se o servidor não responder, a mesa segue para o login/ativação.
+      void withTimeout(reconnectDevice(code), 15000, false).then((ok) => {
         setReconnecting(false);
         if (ok) {
           setSignedIn(true);
@@ -233,9 +235,10 @@ function KidsApp() {
     async function currentSession() {
       // Logo após o login a sessão pode demorar alguns instantes para ficar
       // disponível no armazenamento: tentamos algumas vezes antes de desistir.
+      // Cada tentativa tem prazo: sem internet a renovação da sessão não pode travar a mesa.
       for (let attempt = 0; attempt < 6; attempt++) {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) return data.session;
+        const res = await withTimeout(supabase.auth.getSession(), 4000, null);
+        if (res?.data.session) return res.data.session;
         if (!active) return null;
         await new Promise((r) => setTimeout(r, 250));
       }
@@ -270,25 +273,27 @@ function KidsApp() {
       if (savedOrg) setOrgId(savedOrg);
       const cached = listLocalStudents(savedOrg);
       if (cached.length > 0) setStudents(cached as unknown as Student[]);
-      void supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id)
-        .then(({ data: roles }) => {
-          // Apenas papéis administrativos abrem configurações e painel.
-          const admin = (roles ?? []).some((r) =>
-            ["super_admin", "city_admin", "org_admin"].includes(r.role as string),
-          );
-          if (active) setIsAdmin(admin);
-        });
+      setPending(totalPending());
+      // A interface abre já com os dados locais; o backend atualiza em segundo plano.
+      setReady(true);
+      void withTimeout(
+        supabase.from("user_roles").select("role").eq("user_id", session.user.id),
+        10000,
+        { data: null } as never,
+      ).then(({ data: roles }: { data: { role: string }[] | null }) => {
+        // Apenas papéis administrativos abrem configurações e painel.
+        const admin = (roles ?? []).some((r) =>
+          ["super_admin", "city_admin", "org_admin"].includes(r.role as string),
+        );
+        if (active) setIsAdmin(admin);
+      });
       // A mesa lista apenas as crianças cadastradas na sua própria unidade.
       // Sem internet, as consultas falham em silêncio e a lista local continua valendo.
-      const { data: ownProfile } = await supabase
-        .from("profiles")
-        .select("organization_id")
-        .eq("id", session.user.id)
-        .maybeSingle()
-        .then((r) => r, () => ({ data: null }));
+      const { data: ownProfile } = await withTimeout(
+        supabase.from("profiles").select("organization_id").eq("id", session.user.id).maybeSingle(),
+        10000,
+        { data: null } as never,
+      ) as { data: { organization_id: string | null } | null };
       let query = supabase
         .from("students")
         .select("id, full_name, nickname, organization_id, avatar")
@@ -299,7 +304,9 @@ function KidsApp() {
         rememberOrg(ownProfile.organization_id);
       }
       if (activeOrg) query = query.eq("organization_id", activeOrg);
-      const { data: rows } = await query.order("full_name").then((r) => r, () => ({ data: null }));
+      const { data: rows } = (await withTimeout(query.order("full_name"), 10000, { data: null } as never)) as {
+        data: unknown[] | null;
+      };
       if (!active) return;
       if (rows) {
         const merged = cacheServerStudents(rows as unknown as Parameters<typeof cacheServerStudents>[0]);
@@ -307,16 +314,23 @@ function KidsApp() {
           (activeOrg ? merged.filter((s) => s.organization_id === activeOrg) : merged) as unknown as Student[],
         );
       }
-      setPending(totalPending());
       void loadActivities().then((rows) => {
         if (active) setActivities(rows.map(activityToGame));
       });
       void flushQueue().then((left) => setPending(left));
-      setReady(true);
     }
-    void boot();
+    // Rede de segurança: aconteça o que acontecer, a tela "Preparando a mesa" some em até 20s.
+    const guard = setTimeout(() => {
+      if (active) setReady(true);
+    }, 20000);
+    void boot()
+      .catch(() => {
+        if (active) setReady(true);
+      })
+      .finally(() => clearTimeout(guard));
     return () => {
       active = false;
+      clearTimeout(guard);
     };
   }, [bootKey]);
 

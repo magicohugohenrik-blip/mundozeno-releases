@@ -61,6 +61,8 @@ function installLocalFileRedirect() {
           method: request.method,
           headers,
           body: hasBody ? await request.arrayBuffer() : undefined,
+          // Sem resposta em 20s: trata como offline em vez de travar a mesa.
+          signal: AbortSignal.timeout(20000),
         });
       } catch (error) {
         return new Response(JSON.stringify({ error: "offline", message: String(error) }), {

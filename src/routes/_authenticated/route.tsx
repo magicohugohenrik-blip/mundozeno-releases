@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { withTimeout } from "@/lib/timeout";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -7,14 +8,14 @@ export const Route = createFileRoute("/_authenticated")({
     // Sem internet (mesa/Electron offline), getUser() falha na rede.
     // Nesse caso usamos a sessão já guardada no aparelho para não quebrar a tela.
     try {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) return { user: data.user };
+      const res = await withTimeout(supabase.auth.getUser(), 6000, null);
+      if (res?.data?.user) return { user: res.data.user };
     } catch {
       /* offline: cai no fallback local abaixo */
     }
     try {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) return { user: data.session.user };
+      const res = await withTimeout(supabase.auth.getSession(), 4000, null);
+      if (res?.data.session?.user) return { user: res.data.session.user };
     } catch {
       /* sem sessão local */
     }
