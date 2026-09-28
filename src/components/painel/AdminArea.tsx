@@ -868,15 +868,25 @@ function DeviceCard({
 }
 
 const APP_LABELS: Record<string, string> = {
-  games: "Jogos e Atividades",
+  games: "Jogos (todas as categorias)",
+  memoria: "Memória",
+  logica: "Lógica",
+  cores: "Cores",
+  formas: "Formas",
+  criar: "Criar",
   literacy: "Alfabetização",
   fonoplay: "FonoPlay",
+  desenho: "Desenho Livre",
+  magica: "Tela Mágica",
+  atividades: "Minhas Atividades",
   settings: "Configurações",
 };
+const ALL_APP_IDS = Object.keys(APP_LABELS);
 
 interface AccessRow {
   app_id: string;
   enabled: boolean;
+  hidden: boolean;
   expires_at: string | null;
 }
 
@@ -888,22 +898,32 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
   const load = useCallback(async () => {
     const { data } = await supabase
       .from("device_app_access")
-      .select("app_id, enabled, expires_at")
+      .select("app_id, enabled, hidden, expires_at")
       .eq("device_id", deviceId);
-    setRows((data ?? []) as AccessRow[]);
+    const map = new Map(((data ?? []) as AccessRow[]).map((r) => [r.app_id, r]));
+    setRows(ALL_APP_IDS.map((id) => map.get(id) ?? { app_id: id, enabled: true, hidden: false, expires_at: null }));
   }, [deviceId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function update(appId: string, patch: { enabled?: boolean; expires_at?: string | null }) {
+  async function update(appId: string, patch: Partial<Omit<AccessRow, "app_id">>) {
+    const current = rows.find((r) => r.app_id === appId);
     setBusy(true);
     const { error } = await supabase
       .from("device_app_access")
-      .update(patch)
-      .eq("device_id", deviceId)
-      .eq("app_id", appId);
+      .upsert(
+        {
+          device_id: deviceId,
+          app_id: appId,
+          enabled: current?.enabled ?? true,
+          hidden: current?.hidden ?? false,
+          expires_at: current?.expires_at ?? null,
+          ...patch,
+        },
+        { onConflict: "device_id,app_id" },
+      );
     setBusy(false);
     if (error) {
       toast.error(error.message);
@@ -913,35 +933,35 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
     void load();
   }
 
-  if (rows.length === 0) return null;
+  const btn = "rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60";
 
   return (
     <div className="mt-4 rounded-xl border border-border p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aplicativos liberados</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aplicativos da mesa</p>
       <ul className="mt-2 space-y-2">
         {rows.map((row) => {
           const expired = row.expires_at ? new Date(row.expires_at).getTime() < Date.now() : false;
           return (
             <li key={row.app_id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-semibold">{APP_LABELS[row.app_id] ?? row.app_id}</span>
-              <span className={expired || !row.enabled ? "text-destructive" : "text-muted-foreground"}>
-                {!row.enabled
-                  ? "Bloqueado"
-                  : expired
-                    ? "Expirado"
-                    : row.expires_at
-                      ? `Até ${new Date(row.expires_at).toLocaleDateString("pt-BR")}`
-                      : "Sem prazo"}
+              <span className={row.hidden || expired || !row.enabled ? "text-destructive" : "text-muted-foreground"}>
+                {row.hidden
+                  ? "Oculto"
+                  : !row.enabled
+                    ? "Bloqueado"
+                    : expired
+                      ? "Expirado"
+                      : row.expires_at
+                        ? `Até ${new Date(row.expires_at).toLocaleDateString("pt-BR")}`
+                        : "Sem prazo"}
               </span>
               {isSuper && (
                 <span className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void update(row.app_id, { enabled: !row.enabled })}
-                    className="rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60"
-                  >
+                  <button type="button" disabled={busy} onClick={() => void update(row.app_id, { enabled: !row.enabled })} className={btn}>
                     {row.enabled ? "Bloquear" : "Liberar"}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => void update(row.app_id, { hidden: !row.hidden })} className={btn}>
+                    {row.hidden ? "Mostrar" : "Ocultar"}
                   </button>
                   <button
                     type="button"
@@ -949,33 +969,23 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
                     onClick={() => {
                       const answer = window.prompt("Liberar por quantos dias? (deixe vazio para sem prazo)", "365");
                       if (answer === null) return;
-                      const days = Number(answer.trim());
                       if (answer.trim() === "") {
                         void update(row.app_id, { enabled: true, expires_at: null });
                         return;
                       }
+                      const days = Number(answer.trim());
                       if (!Number.isFinite(days) || days < 1) {
                         toast.error("Informe um número de dias válido.");
                         return;
                       }
-                      const next = new Date(Date.now() + days * 86400000);
-                      void update(row.app_id, { enabled: true, expires_at: next.toISOString() });
+                      void update(row.app_id, { enabled: true, expires_at: new Date(Date.now() + days * 86400000).toISOString() });
                     }}
-                    className="rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60"
+                    className={btn}
                   >
                     Prazo…
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void update(row.app_id, { enabled: true, expires_at: null })}
-                    className="rounded-lg border border-border px-2 py-1 font-semibold disabled:opacity-60"
-                  >
-                    Sem prazo
-                  </button>
                 </span>
               )}
-
             </li>
           );
         })}
@@ -983,4 +993,5 @@ function AppAccessPanel({ deviceId, isSuper }: { deviceId: string; isSuper: bool
     </div>
   );
 }
+
 

@@ -9,6 +9,7 @@ import type { ZenoAppId } from "@/lib/apps";
 
 export interface AppAccess {
   enabled: boolean;
+  hidden?: boolean;
   expiresAt: string | null;
 }
 
@@ -47,12 +48,12 @@ export async function loadAppAccess(): Promise<AppAccessMap> {
     if (!device) return readCache();
     const { data, error } = await supabase
       .from("device_app_access")
-      .select("app_id, enabled, expires_at")
+      .select("app_id, enabled, hidden, expires_at")
       .eq("device_id", device.id);
     if (error || !data) return readCache();
     const map: AppAccessMap = {};
     for (const row of data) {
-      map[row.app_id as ZenoAppId] = { enabled: row.enabled, expiresAt: row.expires_at };
+      map[row.app_id as ZenoAppId] = { enabled: row.enabled, hidden: row.hidden, expiresAt: row.expires_at };
     }
     writeCache(map);
     return map;
@@ -70,4 +71,9 @@ export function appState(map: AppAccessMap, id: ZenoAppId): AppState {
   if (!entry.enabled) return "blocked";
   if (entry.expiresAt && new Date(entry.expiresAt).getTime() < Date.now()) return "expired";
   return "ok";
+}
+
+/** Aplicativo oculto pelo super admin: não aparece na Home. */
+export function isHidden(map: AppAccessMap, id: ZenoAppId): boolean {
+  return map[id]?.hidden === true;
 }

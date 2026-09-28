@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { appsFor, type ZenoApp, type ZenoAppId } from "@/lib/apps";
-import { appState, type AppAccessMap } from "@/lib/appAccess";
+import { appState, isHidden, type AppAccessMap } from "@/lib/appAccess";
 import { useT } from "@/lib/i18n";
 import { portraitOf } from "@/lib/zeno";
 
@@ -28,8 +28,8 @@ export function ZenoHome({
 }) {
   const t = useT();
   const [broken, setBroken] = useState<Record<string, boolean>>({});
-  const apps: ZenoApp[] = appsFor(isAdmin);
   const map: AppAccessMap = access ?? {};
+  const apps: ZenoApp[] = appsFor(isAdmin).filter((a) => !isHidden(map, a.id));
 
 
   return (

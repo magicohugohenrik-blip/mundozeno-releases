@@ -4,6 +4,17 @@ import brendaPortrait from "@/assets/characters/brenda.png";
 import beniPortrait from "@/assets/characters/beni.png";
 import bernardoPortrait from "@/assets/characters/bernardo.png";
 import jessicaPortrait from "@/assets/characters/jessica.png";
+import av_monstro_azul from "@/assets/characters/monstro-azul.webp";
+import av_monstro_verde from "@/assets/characters/monstro-verde.webp";
+import av_monstro_roxo from "@/assets/characters/monstro-roxo.webp";
+import av_robo_laranja from "@/assets/characters/robo-laranja.webp";
+import av_robo_azul from "@/assets/characters/robo-azul.webp";
+import av_robo_rosa from "@/assets/characters/robo-rosa.webp";
+import av_leao from "@/assets/characters/leao.webp";
+import av_panda from "@/assets/characters/panda.webp";
+import av_raposa from "@/assets/characters/raposa.webp";
+import av_dino from "@/assets/characters/dino.webp";
+import av_coruja from "@/assets/characters/coruja.webp";
 
 export type CharacterId = "zeno" | "rafael" | "brenda" | "beni" | "bernardo" | "jessica";
 
@@ -120,6 +131,17 @@ export const characterPortraits: Record<string, string> = {
   beni: beniPortrait,
   bernardo: bernardoPortrait,
   jessica: jessicaPortrait,
+  "monstro-azul": av_monstro_azul,
+  "monstro-verde": av_monstro_verde,
+  "monstro-roxo": av_monstro_roxo,
+  "robo-laranja": av_robo_laranja,
+  "robo-azul": av_robo_azul,
+  "robo-rosa": av_robo_rosa,
+  "leao": av_leao,
+  "panda": av_panda,
+  "raposa": av_raposa,
+  "dino": av_dino,
+  "coruja": av_coruja,
 };
 
 /** Avatares disponíveis: o Zeno e os personagens da turma. */
@@ -132,6 +154,18 @@ export const avatarCharacters = [
     color: c.color,
     image: characterPortraits[c.id]!,
   })),
+  // Personagens extras: monstrinhos, robôs e animais.
+  { id: "monstro-azul", name: "Monstrinho Azul", emoji: "", color: "bg-zeno-blue", image: av_monstro_azul },
+  { id: "monstro-verde", name: "Monstrinho Verde", emoji: "", color: "bg-zeno-green", image: av_monstro_verde },
+  { id: "monstro-roxo", name: "Monstrinho Roxo", emoji: "", color: "bg-zeno-purple", image: av_monstro_roxo },
+  { id: "robo-laranja", name: "Robô Laranja", emoji: "", color: "bg-zeno-orange", image: av_robo_laranja },
+  { id: "robo-azul", name: "Robô Azul", emoji: "", color: "bg-zeno-blue", image: av_robo_azul },
+  { id: "robo-rosa", name: "Robô Rosa", emoji: "", color: "bg-zeno-pink", image: av_robo_rosa },
+  { id: "leao", name: "Leão", emoji: "", color: "bg-zeno-orange", image: av_leao },
+  { id: "panda", name: "Panda", emoji: "", color: "bg-zeno-green", image: av_panda },
+  { id: "raposa", name: "Raposa", emoji: "", color: "bg-zeno-orange", image: av_raposa },
+  { id: "dino", name: "Dino", emoji: "", color: "bg-zeno-green", image: av_dino },
+  { id: "coruja", name: "Coruja", emoji: "", color: "bg-zeno-purple", image: av_coruja },
 ];
 
 export function portraitOf(characterId?: string | null): string {

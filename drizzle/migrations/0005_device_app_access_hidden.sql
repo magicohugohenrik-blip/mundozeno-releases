@@ -1,0 +1,2 @@
+ALTER TABLE public.device_app_access ADD COLUMN IF NOT EXISTS hidden boolean NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS device_app_access_device_app_uidx ON public.device_app_access (device_id, app_id);

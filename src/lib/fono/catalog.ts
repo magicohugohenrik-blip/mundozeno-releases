@@ -163,9 +163,9 @@ export const fonoCatalog: FonoActivity[] = [
     available: true,
     title: { pt: "Sopra o Balão", en: "Blow the Balloon", es: "Sopla el Globo" },
     description: {
-      pt: "Sopre no microfone para o balão subir bem alto.",
-      en: "Blow into the microphone to lift the balloon high.",
-      es: "Sopla en el micrófono para elevar el globo.",
+      pt: "Sopre de verdade e arraste o dedo para o balão subir.",
+      en: "Really blow and drag your finger to lift the balloon.",
+      es: "Sopla de verdad y arrastra el dedo para elevar el globo.",
     },
     instruction: {
       pt: "Encha o peito de ar e sopre para o balão subir.",
@@ -184,9 +184,9 @@ export const fonoCatalog: FonoActivity[] = [
     available: true,
     title: { pt: "Apaga a Velinha", en: "Blow the Candle", es: "Apaga la Velita" },
     description: {
-      pt: "Sopro forte e curto para apagar as velinhas.",
-      en: "Short strong blows to put out the candles.",
-      es: "Soplos cortos y fuertes para apagar las velitas.",
+      pt: "Sopro forte e curto, e deslize o dedo sobre a velinha.",
+      en: "Short strong blow, then swipe over the candle.",
+      es: "Soplo corto y fuerte, y desliza el dedo sobre la velita.",
     },
     instruction: {
       pt: "Sopre forte para apagar cada velinha do bolo.",

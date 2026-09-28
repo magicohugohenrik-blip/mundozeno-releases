@@ -117,6 +117,43 @@ interface Creation {
   created_at: string;
 }
 
+/** Criações ainda não enviadas ao servidor (ficam no aparelho até subir). */
+const LOCAL_KEY = "zeno.magic.pending";
+type LocalRow = Record<string, unknown> & { id: string };
+function readLocal(): LocalRow[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_KEY) ?? "[]") as LocalRow[];
+  } catch {
+    return [];
+  }
+}
+function writeLocal(rows: LocalRow[]) {
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(rows.slice(0, 30)));
+  } catch {
+    // sem espaço: mantém só as mais recentes, sem imagens
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(rows.slice(0, 10).map((r) => ({ ...r, drawing_url: null }))));
+    } catch {}
+  }
+}
+/** Envia as criações pendentes; as que subirem saem da fila local. */
+async function syncLocal() {
+  const rows = readLocal();
+  if (!rows.length || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+  const { data: s } = await supabase.auth.getSession();
+  const uid = s.session?.user.id;
+  if (!uid) return;
+  const left: LocalRow[] = [];
+  for (const r of rows) {
+    const { error } = await supabase
+      .from("magic_creations")
+      .upsert({ ...r, owner_id: uid } as never, { onConflict: "id", ignoreDuplicates: true });
+    if (error) left.push(r);
+  }
+  writeLocal(left);
+}
+
 function errKey(e: unknown): TKey {
   const m = e instanceof Error ? e.message : "";
   const k = ["ai_credits", "ai_busy", "ai_refused", "ai_denied"].find((x) => m.includes(x)) ?? "ai_error";
@@ -179,12 +216,16 @@ function TelaMagica() {
   }, []);
 
   const loadHistory = useCallback(async () => {
+    await syncLocal();
     const { data } = await supabase
       .from("magic_creations")
       .select("id, kind, title, result, drawing_url, image_url, created_at")
       .order("created_at", { ascending: false })
-      .limit(40);
-    setHistory((data ?? []) as unknown as Creation[]);
+      .limit(60);
+    const remote = (data ?? []) as unknown as Creation[];
+    const ids = new Set(remote.map((c) => c.id));
+    const pending = readLocal().filter((c) => !ids.has(c.id)) as unknown as Creation[];
+    setHistory([...pending, ...remote]);
   }, []);
 
   useEffect(() => {
@@ -279,26 +320,26 @@ function TelaMagica() {
   /** Grava a criação no acervo da mesa (usado automaticamente e pelo botão). */
   const persist = async (res: MagicResult | null, img: string | null) => {
     if (!snap) return;
-    const { data: u } = await supabase.auth.getUser();
-    if (!u.user) return;
     const title = String(res?.title ?? understood?.object ?? t("mg.title"));
     const small = img ? await shrink(img, 768) : null;
-    const { error: e } = await supabase.from("magic_creations").insert({
-      owner_id: u.user.id,
+    const row = {
+      id: crypto.randomUUID(),
       organization_id: orgId,
       student_id: studentId || null,
       kind: res ? String(res.kind ?? "activity") : img ? "image" : "board",
       title,
       input_text: snap.texts.join(" | "),
-      result: { ...(res ?? {}), understood, board: board.current?.state() ?? null } as never,
-      drawing_url: await shrink(snap.image, 640),
+      result: { ...(res ?? {}), understood, board: board.current?.state() ?? null },
+      drawing_url: await shrink(snap.image, 480),
       image_url: small,
-    });
-    if (e) setError(t("mg.err.ai_error"));
-    else {
-      setSavedMsg(true);
-      setTimeout(() => setSavedMsg(false), 2600);
-    }
+      created_at: new Date().toISOString(),
+    };
+    // Guarda sempre uma cópia local: aparece em Minhas Atividades mesmo se o envio falhar.
+    writeLocal([row, ...readLocal()]);
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2600);
+    await syncLocal();
+    if (view === "history") void loadHistory();
   };
 
   const save = () => persist(result, image);

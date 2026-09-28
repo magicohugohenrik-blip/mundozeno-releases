@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import type { CatalogGame } from "@/lib/zeno";
 import { categoryOf } from "@/lib/categories";
@@ -22,7 +23,8 @@ export function GameTile({
   const tr = t(key as TKey);
   const title = game.customTitle ?? (tr && tr !== key ? tr : game.title);
   const categoryLabel = t(`category.${category.id}` as TKey);
-  const illustration = gameArt[game.slug];
+  const [broken, setBroken] = useState(false);
+  const illustration = broken ? undefined : gameArt[game.slug];
 
   return (
     <motion.button
@@ -40,7 +42,7 @@ export function GameTile({
           <img
             src={illustration}
             alt=""
-            loading="lazy"
+            onError={() => setBroken(true)}
             width={512}
             height={512}
             className="aspect-square w-full object-cover"

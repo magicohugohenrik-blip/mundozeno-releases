@@ -172,6 +172,7 @@ export type Database = {
           device_id: string
           enabled: boolean
           expires_at: string | null
+          hidden: boolean
           id: string
           updated_at: string
         }
@@ -181,6 +182,7 @@ export type Database = {
           device_id: string
           enabled?: boolean
           expires_at?: string | null
+          hidden?: boolean
           id?: string
           updated_at?: string
         }
@@ -190,6 +192,7 @@ export type Database = {
           device_id?: string
           enabled?: boolean
           expires_at?: string | null
+          hidden?: boolean
           id?: string
           updated_at?: string
         }

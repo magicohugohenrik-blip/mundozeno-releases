@@ -74,9 +74,25 @@ function installLocalFileRedirect() {
     }
     let rel = decodeURIComponent(reqUrl.pathname).replace(/^\/+/, "");
     let file = path.normalize(path.join(WEBAPP_DIR, rel));
-    if (!file.startsWith(WEBAPP_DIR) || !rel || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      file = LOCAL_INDEX; // rotas internas do app (/, /painel, ...) abrem o index
+    const exists = file.startsWith(WEBAPP_DIR) && rel && fs.existsSync(file) && !fs.statSync(file).isDirectory();
+    if (!exists && /\.(png|jpe?g|webp|gif|svg|avif|ico|mp3|ogg|wav|woff2?|ttf)$/i.test(rel)) {
+      // Imagem/som que não veio no instalador: busca no site uma vez e guarda no computador.
+      const cacheDir = path.join(app.getPath("userData"), "asset-cache");
+      const cached = path.normalize(path.join(cacheDir, rel));
+      if (cached.startsWith(cacheDir) && fs.existsSync(cached)) return net.fetch(pathToFileURL(cached).toString());
+      try {
+        const r = await net.fetch(APP_URL.replace(/\/+$/, "") + "/" + rel, { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error(String(r.status));
+        const buf = Buffer.from(await r.arrayBuffer());
+        fs.mkdirSync(path.dirname(cached), { recursive: true });
+        fs.writeFileSync(cached, buf);
+        return new Response(buf, { headers: { "content-type": r.headers.get("content-type") || "application/octet-stream" } });
+      } catch (error) {
+        writeLog(`asset ${rel}: ${error}`);
+        return new Response("", { status: 404 });
+      }
     }
+    if (!exists) file = LOCAL_INDEX; // rotas internas do app (/, /painel, ...) abrem o index
     return net.fetch(pathToFileURL(file).toString());
   });
 }
