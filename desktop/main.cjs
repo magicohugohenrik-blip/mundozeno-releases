@@ -83,12 +83,14 @@ function installLocalFileRedirect() {
 let win = null;
 
 // Uma única instância: evita duas mesas abertas no mesmo computador.
-if (!app.requestSingleInstanceLock()) {
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (win) {
+    if (win && !win.isDestroyed()) {
       if (win.isMinimized()) win.restore();
+      win.show();
       win.focus();
     }
   });
@@ -113,6 +115,10 @@ function createWindow() {
 
   win.setMenuBarVisibility(false);
   win.once("ready-to-show", () => win.show());
+  // Garantia: a janela aparece mesmo se "ready-to-show" não chegar.
+  setTimeout(() => {
+    if (win && !win.isDestroyed() && !win.isVisible()) win.show();
+  }, 8000);
   loadApp(win);
 
   // A criança nunca sai do aplicativo: links externos são bloqueados.
@@ -194,6 +200,7 @@ ipcMain.on("zeno:legacy-storage", (event) => {
 });
 
 app.whenReady().then(async () => {
+  if (!gotLock) return;
   // Tela sempre acesa e sem pedidos de permissão intrusivos.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(permission === "fullscreen" || permission === "media");
@@ -216,7 +223,11 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("window-all-closed", () => app.quit());
+// Só encerra quando a janela principal da mesa já existiu. A janela oculta usada
+// na recuperação da ativação antiga fecha antes dela e não pode derrubar o app.
+app.on("window-all-closed", () => {
+  if (win) app.quit();
+});
 
 /* ------- Ponte usada pela área técnica da mesa ------- */
 
