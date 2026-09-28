@@ -1,47 +1,105 @@
 name: Build Windows Installer
 
-# Gera o instalador Mundo Zeno (MundoZeno-Setup-x.x.x.exe) num runner Windows
-# da Microsoft e publica automaticamente na Release do GitHub quando acionado
-# por uma tag (ex.: v1.0.4). Acionamento manual só builda e deixa o .exe como
-# artifact para download — não publica Release.
+# Fluxo automático: cada alteração enviada para a main (código da mesa ou do
+# aplicativo desktop) gera uma nova versão PATCH, cria a tag vX.Y.Z, monta o
+# instalador NSIS e publica uma GitHub Release real com o .exe e o latest.yml
+# que o electron-updater usa para achar a atualização.
+#
+# Sem loop: o commit de versão e a tag são enviados com o GITHUB_TOKEN, e o
+# GitHub não dispara novos workflows a partir de pushes feitos com esse token.
+# O commit ainda leva [skip ci] por segurança.
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - '.github/workflows/build-windows.yml'
+      - '!desktop/webapp/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: build-windows
+  cancel-in-progress: false
+
 jobs:
   build:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        working-directory: desktop
-        run: npm install
+      - name: Calcular próxima versão
+        id: version
+        shell: bash
+        run: |
+          git fetch --tags --force
+          current=$(node -p "require('./desktop/package.json').version")
+          latest_tag=$(git tag -l 'v*' | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
+          base=$(printf '%s\n%s\n' "$current" "${latest_tag:-0.0.0}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
+          IFS=. read -r major minor patch <<< "$base"
+          next="$major.$minor.$((patch + 1))"
+          echo "Versão atual: $current | última tag: ${latest_tag:-nenhuma} | nova: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
 
-      - name: Build and publish installer
+      - name: Atualizar versão no desktop/package.json
+        working-directory: desktop
+        shell: bash
+        run: npm version "${{ steps.version.outputs.next }}" --no-git-tag-version --allow-same-version
+
+      - name: Gerar aplicação web (modo offline da mesa)
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Instalar dependências do desktop
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Copiar aplicação para desktop/webapp
+        working-directory: desktop
+        run: npm run sync-web
+
+      - name: Gerar instalador e publicar Release
         working-directory: desktop
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Em push de tag: publica na Release automaticamente.
-        # Em acionamento manual: só builda (artifact para download).
-        run: npx electron-builder --win nsis --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
+        run: npx electron-builder --win nsis --publish always
+
+      - name: Registrar versão (commit + tag)
+        shell: bash
+        run: |
+          v="${{ steps.version.outputs.next }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/package.json
+          git commit -m "chore(desktop): versão $v [skip ci]" || true
+          git tag -f "v$v"
+          git push origin HEAD:main || echo "Aviso: não foi possível enviar o commit de versão (a tag garante a próxima versão)."
+          git push origin "v$v" --force
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: MundoZeno-Installer
-          path: desktop/dist/MundoZeno-Setup-*.exe
+          path: |
+            desktop/dist/MundoZeno-Setup-*.exe
+            desktop/dist/latest.yml
           if-no-files-found: warn

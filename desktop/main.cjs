@@ -145,6 +145,13 @@ app.whenReady().then(() => {
     callback(permission === "fullscreen" || permission === "media");
   });
   createWindow();
+  // Consulta automática das GitHub Releases: 1 min após abrir e a cada 6 horas.
+  // O aviso aparece na tela "Atualização do sistema"; nada é instalado sem confirmação.
+  if (!isDev) {
+    const check = () => autoUpdater.checkForUpdates().catch(() => {});
+    setTimeout(check, 60 * 1000);
+    setInterval(check, 6 * 60 * 60 * 1000);
+  }
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

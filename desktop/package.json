@@ -24,7 +24,8 @@
     "publish": {
       "provider": "github",
       "owner": "magicohugohenrik-blip",
-      "repo": "mundozeno-releases"
+      "repo": "mundozeno-releases",
+      "releaseType": "release"
     },
     "win": {
       "target": ["nsis"],
