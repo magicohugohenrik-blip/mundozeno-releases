@@ -65,6 +65,7 @@ function installLocalFileRedirect() {
           signal: AbortSignal.timeout(20000),
         });
       } catch (error) {
+        writeLog(`proxy ${reqUrl.pathname}: ${error}`);
         return new Response(JSON.stringify({ error: "offline", message: String(error) }), {
           status: 503,
           headers: { "content-type": "application/json" },
@@ -81,6 +82,15 @@ function installLocalFileRedirect() {
 }
 
 let win = null;
+
+/** Registro simples em %APPDATA%/Mundo Zeno/zeno-log.txt, para o suporte. */
+function writeLog(line) {
+  try {
+    fs.appendFileSync(path.join(app.getPath("userData"), "zeno-log.txt"), `${new Date().toISOString()} ${line}\n`);
+  } catch {
+    /* sem registro */
+  }
+}
 
 // Uma única instância: evita duas mesas abertas no mesmo computador.
 const gotLock = app.requestSingleInstanceLock();
@@ -369,5 +379,6 @@ ipcMain.handle("zeno:shutdown", async () => {
 ipcMain.handle("zeno:open-external", (_e, url) => shell.openExternal(url));
 
 process.on("uncaughtException", (error) => {
+  writeLog(`erro: ${error && error.stack ? error.stack : error}`);
   dialog.showErrorBox("Mundo Zeno", String(error));
 });
