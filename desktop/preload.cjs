@@ -4,6 +4,23 @@ const { contextBridge, ipcRenderer } = require("electron");
 // É a única fonte da verdade: nunca há número de versão escrito no código da interface.
 const appVersion = ipcRenderer.sendSync("zeno:version-sync");
 
+// Recupera a ativação e os dados locais salvos por versões antigas (outra origem).
+// Só copia chaves ausentes: nunca sobrescreve nem apaga nada da mesa atual.
+try {
+  if (location.protocol === "zeno-app:") {
+    const legacy = ipcRenderer.sendSync("zeno:legacy-storage") || {};
+    if (legacy.zeno_device_activated === "1" && localStorage.getItem("zeno_device_activated") !== "1") {
+      for (const [k, v] of Object.entries(legacy)) {
+        if (localStorage.getItem(k) === null && typeof v === "string") localStorage.setItem(k, v);
+      }
+      if (legacy.zeno_device_code) localStorage.setItem("zeno_device_code", legacy.zeno_device_code);
+      localStorage.setItem("zeno_device_activated", "1");
+    }
+  }
+} catch {
+  /* sem dados antigos */
+}
+
 contextBridge.exposeInMainWorld("zenoDesktop", {
   platform: process.platform,
   appVersion,
