@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Saída administrativa</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0b1020;color:#f1f5f9;display:flex;align-items:center;justify-content:center;height:100vh}
+.box{width:380px}h1{font-size:20px;margin:0 0 6px}p{margin:0 0 14px;color:#94a3b8;font-size:14px}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #334155;background:#111827;color:#fff;font-size:16px;letter-spacing:1px}
+.row{display:flex;gap:8px;margin-top:12px}button{flex:1;padding:11px;border:0;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px}
+.a{background:#2563eb;color:#fff}.b{background:#dc2626;color:#fff}.c{background:#1f2937;color:#cbd5e1}
+#err{color:#f87171;font-size:13px;min-height:18px;margin-top:8px}
+</style></head><body><div class="box">
+<h1>Saída administrativa</h1>
+<p>Digite o código de ativação desta mesa (ex.: MESA-XXXX-XXXX).</p>
+<input id="pw" type="password" autofocus autocomplete="off">
+<div id="err"></div>
+<div class="row"><button class="a" data-a="maintenance">Manutenção</button><button class="b" data-a="quit">Fechar Mundo Zeno</button></div>
+<div class="row"><button class="c" id="cancel">Cancelar</button></div>
+</div><script>
+const pw=document.getElementById("pw"),err=document.getElementById("err");
+document.querySelectorAll("[data-a]").forEach(b=>b.onclick=async()=>{
+  const r=await window.zenoKiosk.exit(pw.value,b.dataset.a);
+  if(!r.ok){err.textContent="Código incorreto.";pw.select();}
+});
+document.getElementById("cancel").onclick=()=>window.zenoKiosk.cancel();
+document.addEventListener("keydown",e=>{if(e.key==="Escape")window.zenoKiosk.cancel();});
+</script></body></html>

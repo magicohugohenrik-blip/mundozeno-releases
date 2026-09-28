@@ -3,7 +3,7 @@
  * Abre a plataforma em tela cheia/quiosque, sem barra de tarefas nem menus,
  * e mantém os dados locais da mesa entre atualizações.
  */
-const { app, BrowserWindow, ipcMain, session, shell, dialog, protocol, net } = require("electron");
+const { app, BrowserWindow, ipcMain, session, shell, dialog, protocol, net, globalShortcut } = require("electron");
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -122,12 +122,102 @@ if (!gotLock) {
   });
 }
 
+/* ------- Modo quiosque ------- */
+let allowQuit = false;
+let maintenance = false;
+let exitWin = null;
+app.on("before-quit", () => {
+  allowQuit = true;
+});
+
+/** Código de ativação salvo na mesa: é a senha da saída administrativa. */
+async function savedTableCode() {
+  try {
+    const v = await win.webContents.executeJavaScript('localStorage.getItem("zeno_device_code")', true);
+    return typeof v === "string" ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
+  } catch {
+    return "";
+  }
+}
+
+function openAdminExit() {
+  if (!win || win.isDestroyed()) return;
+  if (exitWin && !exitWin.isDestroyed()) return exitWin.focus();
+  exitWin = new BrowserWindow({
+    parent: win,
+    modal: true,
+    width: 440,
+    height: 360,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    backgroundColor: "#0b1020",
+    webPreferences: {
+      preload: path.join(__dirname, "kiosk-preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  exitWin.removeMenu();
+  exitWin.loadFile(path.join(__dirname, "kiosk-exit.html"));
+  exitWin.on("closed", () => {
+    exitWin = null;
+  });
+}
+
+ipcMain.handle("zeno:kiosk-exit", async (_e, payload) => {
+  const typed = String((payload && payload.password) || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const expected = await savedTableCode();
+  if (expected && typed !== expected) return { ok: false };
+  const action = payload && payload.action;
+  writeLog(`saida administrativa: ${action}`);
+  if (exitWin && !exitWin.isDestroyed()) exitWin.close();
+  if (action === "quit") {
+    allowQuit = true;
+    app.quit();
+  } else if (action === "maintenance" && win) {
+    maintenance = true;
+    win.setKiosk(false);
+    win.setFullScreen(false);
+    win.setResizable(true);
+    win.setMinimizable(true);
+    win.setMaximizable(true);
+    win.setBounds({ width: 1280, height: 800 });
+    win.center();
+    win.minimize();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle("zeno:kiosk-cancel", () => {
+  if (exitWin && !exitWin.isDestroyed()) exitWin.close();
+  return true;
+});
+
+/** Liga a abertura junto com o Windows uma única vez (o admin pode desligar depois). */
+function ensureAutoLaunchOnce() {
+  if (isDev || process.platform !== "win32") return;
+  try {
+    const marker = path.join(app.getPath("userData"), "autolaunch-set");
+    if (fs.existsSync(marker)) return;
+    app.setLoginItemSettings({ openAtLogin: true, path: process.execPath, args: [] });
+    fs.writeFileSync(marker, new Date().toISOString());
+  } catch (e) {
+    writeLog(`autolaunch: ${e}`);
+  }
+}
+
 function createWindow() {
   installLocalFileRedirect();
   win = new BrowserWindow({
     show: false,
     fullscreen: true,
     kiosk: !isDev,
+    frame: isDev,
+    resizable: isDev,
+    minimizable: isDev,
+    maximizable: isDev,
     autoHideMenuBar: true,
     backgroundColor: "#0b1020",
     webPreferences: {
@@ -140,6 +230,19 @@ function createWindow() {
   });
 
   win.setMenuBarVisibility(false);
+  if (!isDev) win.removeMenu();
+  // Quiosque: Alt+F4 / fechar não encerram a mesa. Só a saída administrativa,
+  // o desligamento do Windows ou a instalação de atualização fecham o app.
+  win.on("close", (event) => {
+    if (!isDev && !allowQuit) event.preventDefault();
+  });
+  win.on("session-end", () => {
+    allowQuit = true;
+  });
+  // Se sair da tela cheia sem autorização, volta ao quiosque.
+  win.on("leave-full-screen", () => {
+    if (!isDev && !maintenance && win && !win.isDestroyed()) win.setKiosk(true);
+  });
   win.once("ready-to-show", () => win.show());
   // Garantia: a janela aparece mesmo se "ready-to-show" não chegar.
   setTimeout(() => {
@@ -237,6 +340,9 @@ app.whenReady().then(async () => {
     /* segue sem migração */
   }
   createWindow();
+  ensureAutoLaunchOnce();
+  // Saída administrativa do quiosque: Ctrl + Shift + Alt + Z.
+  globalShortcut.register("Control+Shift+Alt+Z", openAdminExit);
   // Consulta automática das GitHub Releases: 1 min após abrir e a cada 6 horas.
   // O aviso aparece na tela "Atualização do sistema"; nada é instalado sem confirmação.
   if (!isDev) {
@@ -284,6 +390,7 @@ ipcMain.handle("zeno:auto-launch:set", (_e, enabled) => {
 
 ipcMain.handle("zeno:kiosk", (_e, enabled) => {
   if (!win) return false;
+  maintenance = !enabled;
   win.setKiosk(!!enabled);
   win.setFullScreen(!!enabled);
   return win.isKiosk();
@@ -339,6 +446,7 @@ ipcMain.handle("zeno:update:download", async () => {
 });
 
 ipcMain.handle("zeno:update:install", () => {
+  allowQuit = true;
   autoUpdater.quitAndInstall(false, true);
   return true;
 });
@@ -398,3 +506,5 @@ process.on("uncaughtException", (error) => {
   writeLog(`erro: ${error && error.stack ? error.stack : error}`);
   dialog.showErrorBox("Mundo Zeno", String(error));
 });
+
+app.on("will-quit", () => globalShortcut.unregisterAll());
