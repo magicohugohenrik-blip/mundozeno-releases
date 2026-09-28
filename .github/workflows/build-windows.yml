@@ -47,12 +47,24 @@ jobs:
 
       - name: Calcular próxima versão
         id: version
-        shell: bash
+        # Sem -e/pipefail: busca sem resultado não pode encerrar o passo.
+        shell: bash --noprofile --norc {0}
         run: |
-          git fetch --tags --force
-          current=$(node -p "require('./desktop/package.json').version")
-          latest_tag=$(git tag -l 'v*' | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
-          base=$(printf '%s\n%s\n' "$current" "${latest_tag:-0.0.0}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
+          git fetch --tags --force --quiet 2>/dev/null || echo "Aviso: não foi possível buscar as tags; usando as locais."
+          current=$(node -p "require('./desktop/package.json').version" 2>/dev/null)
+          if ! [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then current="0.0.0"; fi
+          latest_tag=""
+          for t in $(git tag -l 'v*' 2>/dev/null); do
+            v="${t#v}"
+            [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+            if [ -z "$latest_tag" ] || [ "$(printf '%s\n%s\n' "$latest_tag" "$v" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)" = "$v" ]; then
+              latest_tag="$v"
+            fi
+          done
+          base="$current"
+          if [ -n "$latest_tag" ]; then
+            base=$(printf '%s\n%s\n' "$current" "$latest_tag" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)
+          fi
           IFS=. read -r major minor patch <<< "$base"
           next="$major.$minor.$((patch + 1))"
           echo "Versão atual: $current | última tag: ${latest_tag:-nenhuma} | nova: $next"
