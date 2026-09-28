@@ -75,6 +75,19 @@ jobs:
         shell: bash
         run: npm version "${{ steps.version.outputs.next }}" --no-git-tag-version --allow-same-version
 
+      # O .env não vai para o GitHub; sem ele a mesa não conecta ao servidor.
+      # Só valores públicos (endereço e chave publicável) — nenhum segredo privado.
+      - name: Configurar conexão pública com o servidor
+        shell: bash
+        run: |
+          cat > .env <<'EOF'
+          VITE_SUPABASE_URL=https://szzemnfodczknsxtkjkc.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_uRkp_tH_bz7lfPDMar3M2g_DwQuuozK
+          VITE_SUPABASE_PROJECT_ID=szzemnfodczknsxtkjkc
+          SUPABASE_URL=https://szzemnfodczknsxtkjkc.supabase.co
+          SUPABASE_PUBLISHABLE_KEY=sb_publishable_uRkp_tH_bz7lfPDMar3M2g_DwQuuozK
+          EOF
+
       - name: Gerar aplicação web (modo offline da mesa)
         shell: bash
         run: |
@@ -88,6 +101,10 @@ jobs:
       - name: Copiar aplicação para desktop/webapp
         working-directory: desktop
         run: npm run sync-web
+
+      - name: Conferir conexão embutida na mesa
+        shell: bash
+        run: grep -rlq "szzemnfodczknsxtkjkc.supabase.co" desktop/webapp/assets || { echo "Endereço do servidor ausente no aplicativo"; exit 1; }
 
       - name: Gerar instalador e publicar Release
         working-directory: desktop
