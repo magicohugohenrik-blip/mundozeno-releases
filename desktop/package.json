@@ -1,7 +1,7 @@
 {
   "name": "mundo-zeno-desktop",
   "productName": "Mundo Zeno",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "private": true,
   "description": "Aplicativo Windows da mesa interativa Mundo Zeno",
   "main": "main.cjs",
@@ -20,7 +20,13 @@
   "build": {
     "appId": "br.com.mundozeno.mesa",
     "productName": "Mundo Zeno",
-    "files": ["main.cjs", "preload.cjs", "offline.html", "webapp/**/*", "node_modules/**/*"],
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "offline.html",
+      "webapp/**/*",
+      "node_modules/**/*"
+    ],
     "publish": {
       "provider": "github",
       "owner": "magicohugohenrik-blip",
@@ -28,7 +34,9 @@
       "releaseType": "release"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "MundoZeno-Setup-${version}.${ext}"
     },
     "nsis": {
