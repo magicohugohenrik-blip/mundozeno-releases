@@ -55,6 +55,11 @@ import { LoginScreen } from "@/components/zeno/LoginScreen";
 import { DeviceActivationScreen, deviceActivated, reconnectDevice } from "@/components/zeno/DeviceActivationScreen";
 import { isDesktop } from "@/lib/desktop";
 import { kioskEnabled } from "@/lib/kiosk";
+
+/** Aparelho dedicado (mesa em quiosque ou aplicativo Windows). */
+function dedicatedTable(): boolean {
+  return kioskEnabled() || isDesktop();
+}
 import { ZenoHome } from "@/components/zeno/ZenoHome";
 import { SettingsApp } from "@/components/zeno/SettingsApp";
 import { categoryOfApp, type ZenoAppId } from "@/lib/apps";
@@ -136,14 +141,14 @@ function KidsApp() {
   // Mesa dedicada (quiosque ou app Windows) precisa do código de ativação antes do login.
   const [needsActivation, setNeedsActivation] = useState(false);
   useEffect(() => {
-    setNeedsActivation((kioskEnabled() || isDesktop()) && !deviceActivated());
+    setNeedsActivation(dedicatedTable() && !deviceActivated());
   }, [bootKey]);
 
   // Mesa ativada que perdeu a sessão: reconecta sozinha com o código guardado.
   const [reconnecting, setReconnecting] = useState(false);
   const triedReconnect = useRef(false);
   useEffect(() => {
-    if (!ready || screen !== "login" || triedReconnect.current) return undefined;
+    if (!ready || signedIn || triedReconnect.current) return undefined;
     const code = getDeviceCode();
     if (!deviceActivated() || !code) return undefined;
     const run = () => {
@@ -156,8 +161,10 @@ function KidsApp() {
           setSignedIn(true);
           setReady(false);
           setBootKey((k) => k + 1);
-        } else {
-          setNeedsActivation((kioskEnabled() || isDesktop()) && !deviceActivated());
+        } else if (!deviceActivated()) {
+          // Código recusado pelo servidor: a mesa volta para a tela de ativação.
+          setNeedsActivation(dedicatedTable());
+          setScreen("login");
         }
       });
     };
@@ -250,6 +257,18 @@ function KidsApp() {
       if (!session) {
         setSignedIn(false);
         setIsAdmin(false);
+        // Mesa já ativada: abre direto na interface da mesa com os dados locais
+        // (a reconexão com o código guardado acontece em segundo plano).
+        if (dedicatedTable() && deviceActivated() && getDeviceCode()) {
+          const savedOrg = rememberedOrg();
+          if (savedOrg) setOrgId(savedOrg);
+          const cached = listLocalStudents(savedOrg);
+          if (cached.length > 0) setStudents(cached as unknown as Student[]);
+          setPending(totalPending());
+          setScreen("students");
+          setReady(true);
+          return;
+        }
         setScreen("login");
         setReady(true);
         return;
@@ -426,8 +445,9 @@ function KidsApp() {
   }
 
   if (screen === "login") {
-    // Em mesa/quiosque, o primeiro acesso exige o código de ativação.
-    if (needsActivation) {
+    // Em mesa/quiosque/app Windows nunca aparece o login administrativo:
+    // o acesso é sempre pelo código de ativação da mesa.
+    if (needsActivation || dedicatedTable()) {
       return (
         <DeviceActivationScreen
           onActivated={() => {

@@ -22,6 +22,8 @@ function bridge(): DesktopBridge | null {
 }
 
 export function isDesktop(): boolean {
+  // O app Windows carrega a mesa pela origem própria "zeno-app:" — vale mesmo se a ponte falhar.
+  if (typeof window !== "undefined" && window.location.protocol === "zeno-app:") return true;
   return bridge() !== null;
 }
 
