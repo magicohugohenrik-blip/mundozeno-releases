@@ -12,6 +12,7 @@ export interface DesktopBridge {
   getAutoLaunch: () => Promise<boolean>;
   checkForUpdates: () => Promise<{ available: boolean; version?: string; error?: string }>;
   setKiosk: (enabled: boolean) => Promise<boolean>;
+  adminExit?: (password: string, action: "maintenance" | "quit") => Promise<{ ok: boolean }>;
   shutdown?: () => Promise<{ ok: boolean; error?: string }>;
   onWillShutdown?: (cb: () => void) => () => void;
 }
@@ -45,6 +46,12 @@ export async function getAutoLaunch(): Promise<boolean> {
 
 export async function setAutoLaunch(enabled: boolean): Promise<boolean> {
   return (await bridge()?.setAutoLaunch(enabled)) ?? false;
+}
+
+/** Saída administrativa do quiosque (só no app Windows), protegida pelo código da mesa. */
+export async function adminExitKiosk(password: string, action: "maintenance" | "quit"): Promise<boolean> {
+  const r = await bridge()?.adminExit?.(password, action);
+  return !!r?.ok;
 }
 
 export async function setNativeKiosk(enabled: boolean): Promise<boolean> {

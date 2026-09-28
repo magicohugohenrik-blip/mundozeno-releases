@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("zenoDesktop", {
   getAutoLaunch: () => ipcRenderer.invoke("zeno:auto-launch:get"),
   setAutoLaunch: (enabled) => ipcRenderer.invoke("zeno:auto-launch:set", enabled),
   setKiosk: (enabled) => ipcRenderer.invoke("zeno:kiosk", enabled),
+  adminExit: (password, action) => ipcRenderer.invoke("zeno:kiosk-exit", { password, action }),
   checkForUpdates: () => ipcRenderer.invoke("zeno:update"),
   shutdown: () => ipcRenderer.invoke("zeno:shutdown"),
   onWillShutdown: (cb) => {

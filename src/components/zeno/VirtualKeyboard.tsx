@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Keyboard as KeyboardIcon } from "lucide-react";
 import { KEYBOARD_EVENT, keyboardEnabled, syncKeyboardSetting } from "@/lib/keyboard";
 
 /**
@@ -207,8 +208,9 @@ export function VirtualKeyboard() {
         className={`fixed z-[80] min-h-11 rounded-full border border-border bg-card/95 px-4 font-display text-lg text-foreground shadow-card backdrop-blur ${
           floating ? "" : "bottom-3 right-3"
         }`}
+        aria-label="teclado"
       >
-        ⌨️
+        <KeyboardIcon className="h-6 w-6" />
       </button>
     );
   }
@@ -225,7 +227,7 @@ export function VirtualKeyboard() {
           style={{ cursor: floating ? "grab" : "default", touchAction: "none" }}
         >
           <span className="select-none px-2 font-display text-base text-muted-foreground">
-            {floating ? "✥ arraste aqui" : "⌨️ teclado"}
+            {floating ? "arraste aqui" : "teclado"}
           </span>
           <div className="ml-auto flex gap-1.5">
             <Key label={floating ? "Fixar embaixo" : "Flutuar"} wide onPress={() => setMode(!floating)} />
@@ -245,6 +247,7 @@ export function VirtualKeyboard() {
             <>
               <Key label={symbols ? "abc" : "?123"} wide onPress={() => setSymbols((s) => !s)} />
               {!symbols && <Key label={caps ? "⇧ ABC" : "⇧ abc"} wide onPress={() => setCaps((c) => !c)} />}
+              {!symbols && <Key label="-" onPress={() => press("-")} />}
               <Key label="espaço" grow onPress={() => press(" ")} />
             </>
           )}

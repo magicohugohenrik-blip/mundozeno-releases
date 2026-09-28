@@ -218,6 +218,11 @@ export const es: Dict = {
   "tech.activate": "Activar",
   "tech.activated": "Mesa activada con el nuevo código.",
   "tech.kioskTitle": "Modo quiosco",
+  "tech.adminTitle": "Mantenimiento de Windows",
+  "tech.adminHint": "Escribe el código de activación de esta mesa para salir del modo quiosco o cerrar Mundo Zeno.",
+  "tech.adminMaintenance": "Salir para mantenimiento",
+  "tech.adminQuit": "Cerrar Mundo Zeno",
+  "tech.adminWrong": "Código de la mesa incorrecto.",
   "tech.kioskHint":
     "Pantalla completa, pantalla siempre encendida y salida con PIN (por defecto 2468).",
   "tech.kioskEnter": "Activar quiosco",

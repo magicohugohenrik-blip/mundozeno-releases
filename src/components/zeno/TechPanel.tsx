@@ -18,6 +18,7 @@ import {
   quitApp,
   setAutoLaunch,
   setNativeKiosk,
+  adminExitKiosk,
   shutdownComputer,
 } from "@/lib/desktop";
 import { useI18n, useT } from "@/lib/i18n";
@@ -58,6 +59,13 @@ export function TechPanel({ online, onClose }: { online: boolean; onClose: () =>
   const [touchPoints, setTouchPoints] = useState(0);
   const [strokes, setStrokes] = useState<{ x: number; y: number }[]>([]);
   const [confirmOff, setConfirmOff] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+
+  async function adminExit(action: "maintenance" | "quit") {
+    const ok = await adminExitKiosk(adminCode, action);
+    if (!ok) toast.error(t("tech.adminWrong"));
+    setAdminCode("");
+  }
   const [shuttingDown, setShuttingDown] = useState(false);
 
   useEffect(() => {
@@ -304,6 +312,35 @@ export function TechPanel({ online, onClose }: { online: boolean; onClose: () =>
             </button>
           </div>
         </section>
+
+        {desktop && (
+          <section className="mt-4 rounded-2xl border border-border p-4">
+            <h3 className="font-display text-lg">{t("tech.adminTitle")}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t("tech.adminHint")}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <input
+                type="password"
+                value={adminCode}
+                onChange={(e) => setAdminCode(e.target.value.toUpperCase())}
+                placeholder="MESA-XXXX-XXXX"
+                autoComplete="off"
+                className="min-h-12 w-56 rounded-xl border border-border bg-background px-3 text-base"
+              />
+              <button
+                onClick={() => void adminExit("maintenance")}
+                className="min-h-12 rounded-xl bg-zeno-blue px-4 text-sm font-semibold text-white"
+              >
+                {t("tech.adminMaintenance")}
+              </button>
+              <button
+                onClick={() => void adminExit("quit")}
+                className="min-h-12 rounded-xl bg-zeno-orange px-4 text-sm font-semibold text-white"
+              >
+                {t("tech.adminQuit")}
+              </button>
+            </div>
+          </section>
+        )}
 
         <section className="mt-4 rounded-2xl border border-border p-4">
           <h3 className="font-display text-lg">{t("tech.diagTitle")}</h3>

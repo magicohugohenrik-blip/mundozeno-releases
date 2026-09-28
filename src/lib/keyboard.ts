@@ -26,7 +26,9 @@ export function isPhone(): boolean {
 
 export function keyboardEnabled(): boolean {
   if (typeof window === "undefined") return false;
-  if (isPhone()) return false;
+  // App Windows da mesa: sempre tela touch grande, mesmo com resolução baixa.
+  const desktopApp = window.location.protocol === "zeno-app:" || "zenoDesktop" in window;
+  if (!desktopApp && isPhone()) return false;
   return window.localStorage.getItem(KEY) !== "off";
 }
 
