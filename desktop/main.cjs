@@ -141,11 +141,68 @@ ipcMain.handle("zeno:offline:retry", () => {
 });
 
 
-app.whenReady().then(() => {
+/* ------- Recuperação da ativação de versões anteriores -------
+ * O navegador guarda os dados (localStorage) separados por endereço de origem.
+ * Versões antigas abriam a mesa pelo site (https://turmadozeno.lovable.app) ou por
+ * file://; a atual abre por zeno-app://mesa. A ativação salva lá continua no disco,
+ * mas a nova origem não a enxerga. Aqui lemos (só leitura) essas origens antigas
+ * e entregamos ao preload, que copia apenas as chaves que ainda não existem.
+ */
+let legacyStorage = {};
+
+async function readOriginStorage(load) {
+  const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } });
+  try {
+    await Promise.race([load(w), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000))]);
+    const json = await w.webContents.executeJavaScript(
+      "(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return JSON.stringify(o); })()",
+    );
+    return JSON.parse(json || "{}");
+  } catch {
+    return {};
+  } finally {
+    if (!w.isDestroyed()) w.destroy();
+  }
+}
+
+async function collectLegacyStorage() {
+  if (!hasLocalApp) return;
+  const appOrigin = new URL(APP_URL).origin;
+  const stub = "<!doctype html><title>zeno</title>";
+  // Intercepta só o endereço do site durante a leitura: funciona mesmo sem internet.
+  protocol.handle("https", (req) =>
+    new URL(req.url).origin === appOrigin
+      ? new Response(stub, { headers: { "content-type": "text/html" } })
+      : net.fetch(req, { bypassCustomProtocolHandlers: true }),
+  );
+  let fromSite = {};
+  try {
+    fromSite = await readOriginStorage((w) => w.loadURL(appOrigin + "/__zeno-migrate"));
+  } finally {
+    protocol.unhandle("https");
+  }
+  const fromFile = fs.existsSync(OFFLINE_PAGE) ? await readOriginStorage((w) => w.loadFile(OFFLINE_PAGE)) : {};
+  // Prioridade: a origem que tem a mesa ativada.
+  const ranked = [fromSite, fromFile].sort(
+    (a, b) => (b.zeno_device_activated === "1") - (a.zeno_device_activated === "1"),
+  );
+  legacyStorage = Object.assign({}, ranked[1], ranked[0]);
+}
+
+ipcMain.on("zeno:legacy-storage", (event) => {
+  event.returnValue = legacyStorage;
+});
+
+app.whenReady().then(async () => {
   // Tela sempre acesa e sem pedidos de permissão intrusivos.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(permission === "fullscreen" || permission === "media");
   });
+  try {
+    await collectLegacyStorage();
+  } catch {
+    /* segue sem migração */
+  }
   createWindow();
   // Consulta automática das GitHub Releases: 1 min após abrir e a cada 6 horas.
   // O aviso aparece na tela "Atualização do sistema"; nada é instalado sem confirmação.
