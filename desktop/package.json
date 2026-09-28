@@ -1,7 +1,7 @@
 {
   "name": "mundo-zeno-desktop",
   "productName": "Mundo Zeno",
-  "version": "1.0.8",
+  "version": "1.0.19",
   "private": true,
   "description": "Aplicativo Windows da mesa interativa Mundo Zeno",
   "main": "main.cjs",
