@@ -1,4 +1,3 @@
-import { publicOrigin } from "@/lib/publicUrl";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -39,6 +38,8 @@ import { createMagicShare, importMagicShare } from "@/lib/magica-share.functions
 import { MagicBoard, type BoardState, type MagicBoardHandle } from "@/components/magica/MagicBoard";
 import { ActivityEngine, resultSpeech, type MagicResult } from "@/components/magica/ActivityEngine";
 import { PROFESSIONS, PROFESSION_STORE, allowsRecipe, isProfession, type Profession } from "@/lib/magica/professions";
+import { publicOrigin } from "@/lib/publicUrl";
+
 
 
 export const Route = createFileRoute("/_authenticated/tela-magica")({

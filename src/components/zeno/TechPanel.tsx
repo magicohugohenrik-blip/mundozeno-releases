@@ -24,6 +24,8 @@ import { useI18n, useT } from "@/lib/i18n";
 import { localPoint } from "@/lib/pointer";
 import { localReports, type LocalStudentReport } from "@/lib/local-report";
 import { skillLabels, type SkillId } from "@/lib/skills";
+import { isHandheld } from "@/lib/deviceKind";
+
 
 interface DeviceInfo {
   status: string;
@@ -38,6 +40,10 @@ export function TechPanel({ online, onClose }: { online: boolean; onClose: () =>
   const t = useT();
   const { lang } = useI18n();
   const [reports, setReports] = useState<LocalStudentReport[]>([]);
+  // A mesa não imprime: a opção fica só no celular ou tablet do profissional.
+  const [canPrint, setCanPrint] = useState(false);
+  useEffect(() => setCanPrint(isHandheld()), []);
+
   const skillName = (id: string) =>
     skillLabels[lang]?.[id as SkillId] ?? skillLabels.pt[id as SkillId] ?? id;
   const [code, setCode] = useState(() => getDeviceCode());
@@ -241,12 +247,15 @@ export function TechPanel({ online, onClose }: { online: boolean; onClose: () =>
                   )}
                 </div>
               ))}
-              <button
-                onClick={() => window.print()}
-                className="w-full rounded-xl border border-border px-4 py-2 text-sm font-semibold"
-              >
-                🖨️ {t("tech.localPrint")}
-              </button>
+              {canPrint && (
+                <button
+                  onClick={() => window.print()}
+                  className="no-print w-full rounded-xl border border-border px-4 py-2 text-sm font-semibold"
+                >
+                  {t("tech.localPrint")}
+                </button>
+              )}
+
             </div>
           )}
         </section>

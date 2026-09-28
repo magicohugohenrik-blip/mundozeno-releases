@@ -403,3 +403,18 @@ body {
     min-height: 44px;
   }
 }
+
+/* Impressão a partir do celular/tablet: folha limpa, sem botões nem menus. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}

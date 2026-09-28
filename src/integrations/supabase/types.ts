@@ -678,6 +678,36 @@ export type Database = {
           },
         ]
       }
+      report_org_shares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          organization_id: string
+          revoked: boolean
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          organization_id: string
+          revoked?: boolean
+          token: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          revoked?: boolean
+          token?: string
+        }
+        Relationships: []
+      }
       report_shares: {
         Row: {
           created_at: string

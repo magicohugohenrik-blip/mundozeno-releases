@@ -662,10 +662,9 @@ function Reports({ students, sessions }: { students: Student[]; sessions: Sessio
               Exportar CSV
             </button>
             <button
-              onClick={() => setQrFor(studentId)}
-              disabled={!studentId}
-              className="rounded-full bg-zeno-blue px-5 py-2 font-semibold text-white disabled:opacity-50"
-              title="Escolha uma criança para gerar o QR Code"
+              onClick={() => setQrFor(studentId || "org")}
+              className="rounded-full bg-zeno-blue px-5 py-2 font-semibold text-white"
+              title="Gera o QR Code da mesa inteira ou da criança selecionada"
             >
               📱 Ver no celular
             </button>
@@ -675,11 +674,12 @@ function Reports({ students, sessions }: { students: Student[]; sessions: Sessio
 
       {qrFor && (
         <ReportQr
-          studentId={qrFor}
-          studentName={students.find((s) => s.id === qrFor)?.full_name ?? "Criança"}
+          studentId={qrFor === "org" ? null : qrFor}
+          studentName={students.find((s) => s.id === qrFor)?.full_name ?? null}
           onClose={() => setQrFor("")}
         />
       )}
+
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card><p className="text-sm text-muted-foreground">Atividades</p><p className="font-display text-3xl">{filtered.length}</p></Card>

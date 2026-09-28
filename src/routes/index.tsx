@@ -197,9 +197,9 @@ function KidsApp() {
   const [sound, setSound] = useState(true);
   const [activities, setActivities] = useState<CatalogGame[]>([]);
   const [tech, setTech] = useState(false);
-  /** QR Code do relatório: criança escolhida ou seletor aberto. */
-  const [qr, setQr] = useState<{ id: string; name: string } | null>(null);
-  const [qrPick, setQrPick] = useState(false);
+  /** QR Code unificado: mesa inteira ou a criança escolhida. */
+  const [qr, setQr] = useState<{ id: string | null; name: string | null } | null>(null);
+
 
   const [access, setAccess] = useState<AppAccessMap>(() => ({}));
   const { rotation, rotate } = useRotation();
@@ -589,13 +589,14 @@ function KidsApp() {
           canSettings={signedIn}
           onSettings={() => setAskSettings(true)}
           canQr={signedIn}
-          onQr={() => {
-            if (student && student.id !== "guest") {
-              setQr({ id: student.id, name: student.nickname ?? student.full_name });
-            } else {
-              setQrPick(true);
-            }
-          }}
+          onQr={() =>
+            setQr(
+              student && student.id !== "guest"
+                ? { id: student.id, name: student.nickname ?? student.full_name }
+                : { id: null, name: null },
+            )
+          }
+
 
 
 
@@ -843,44 +844,8 @@ function KidsApp() {
           </div>
         )}
 
-        {qrPick && (
-          <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-toy">
-              <h2 className="font-display text-2xl">📱 {t("nav.reports")}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{t("students.pick")}</p>
-              <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
-                {students.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setQrPick(false);
-                      setQr({ id: s.id, name: s.nickname ?? s.full_name });
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-border p-3 text-left active:scale-95"
-                  >
-                    <img
-                      src={portraitOf(s.avatar?.character)}
-                      alt=""
-                      width={128}
-                      height={128}
-                      className={`h-10 w-10 rounded-full object-cover ${s.avatar?.color ?? "bg-zeno-blue"}`}
-                    />
-                    <span className="truncate font-display text-lg">{s.nickname ?? s.full_name}</span>
-                  </button>
-                ))}
-                {students.length === 0 && <p className="text-sm text-muted-foreground">{t("students.empty")}</p>}
-              </div>
-              <button
-                onClick={() => setQrPick(false)}
-                className="mt-4 min-h-[3.25rem] w-full rounded-full border border-border px-6 font-display text-lg active:scale-95"
-              >
-                {t("students.cancel")}
-              </button>
-            </div>
-          </div>
-        )}
-
         {qr && <ReportQr studentId={qr.id} studentName={qr.name} onClose={() => setQr(null)} />}
+
 
         {settings && <SettingsApp online={online} onClose={() => setSettings(false)} />}
         {tech && <TechPanel online={online} onClose={() => setTech(false)} />}

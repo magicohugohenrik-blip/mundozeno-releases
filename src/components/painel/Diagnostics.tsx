@@ -8,7 +8,9 @@ import { arcadeBySlug } from "@/lib/arcade/catalog";
 import { actionBySlug } from "@/lib/arcade/action";
 import { literacyBySlug } from "@/lib/literacy/catalog";
 import { skillLabels, type SkillId } from "@/lib/skills";
+import { isHandheld } from "@/lib/deviceKind";
 import { toast } from "sonner";
+
 
 /** Nome legível de um jogo, olhando todos os catálogos (clássicos, gerados, dinâmicos, alfabetização). */
 function gameTitle(slug: string): string {
@@ -68,7 +70,11 @@ interface Metrics {
 
 /** Aba "Relatório": relatório de desempenho gerado a partir da jogabilidade + anamnese. */
 export function Diagnostics({ students }: { students: StudentLite[] }) {
+  // Imprimir só faz sentido no celular ou tablet do profissional.
+  const [canPrint, setCanPrint] = useState(false);
+  useEffect(() => setCanPrint(isHandheld()), []);
   const [studentId, setStudentId] = useState(students[0]?.id ?? "");
+
   const [days, setDays] = useState(90);
   const [busy, setBusy] = useState(false);
   const [list, setList] = useState<Assessment[]>([]);
@@ -204,12 +210,15 @@ export function Diagnostics({ students }: { students: StudentLite[] }) {
             diagnóstico de um profissional de saúde.
           </p>
 
-          <button
-            onClick={() => window.print()}
-            className="rounded-full border border-border px-4 py-2 text-sm font-semibold"
-          >
-            Imprimir / salvar PDF
-          </button>
+          {canPrint && (
+            <button
+              onClick={() => window.print()}
+              className="no-print rounded-full border border-border px-4 py-2 text-sm font-semibold"
+            >
+              Imprimir / salvar PDF
+            </button>
+          )}
+
         </article>
       ))}
 
